@@ -42,6 +42,17 @@ export interface StaffBoardItem {
   updated_at: string;
 }
 
+export interface PickupWindow {
+  pickup_window: string;
+  capacity: number;
+  active: boolean;
+}
+
+export interface PickupSlot {
+  slot_id: string;
+  active: boolean;
+}
+
 export interface SlotReservation {
   order_id: string;
   slot_id: string;
@@ -68,4 +79,3 @@ export interface AnalyticsSnapshot {
     source: string;
   }>;
 }
-

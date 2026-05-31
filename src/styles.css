@@ -142,6 +142,14 @@ h3 {
   align-items: start;
 }
 
+.evidence-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 14px;
+  align-items: start;
+  margin-top: 14px;
+}
+
 .panel {
   display: grid;
   gap: 16px;
@@ -291,6 +299,12 @@ h3 {
   gap: 8px;
 }
 
+.capacity-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .metric {
   display: grid;
   gap: 7px;
@@ -326,8 +340,154 @@ h3 {
   padding: 14px;
 }
 
+.compact-select {
+  width: 150px;
+  min-height: 38px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail,
+.compact-row,
+.reservation-row,
+.event-row {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e3e4d9;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.detail span,
+.compact-row span,
+.reservation-row span,
+.event-row span,
+.event-row small,
+.slot-tile span,
+.slot-tile small {
+  color: #667067;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.detail strong,
+.compact-row strong,
+.reservation-row strong,
+.event-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.timeline-step {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: #8a928b;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.timeline-step span {
+  height: 6px;
+  border-radius: 999px;
+  background: #e1e5dc;
+}
+
+.timeline-step.active {
+  color: #17634d;
+}
+
+.timeline-step.active span {
+  background: #24916f;
+}
+
+.timeline-step p {
+  overflow-wrap: anywhere;
+}
+
+.item-stack,
+.table-list,
+.event-list {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.slot-tile {
+  display: grid;
+  min-height: 76px;
+  align-content: start;
+  gap: 5px;
+  border: 1px solid #dbe1d6;
+  border-radius: 8px;
+  background: #f7fbf5;
+  padding: 10px;
+}
+
+.slot-tile strong {
+  font-size: 1rem;
+}
+
+.slot-tile.reserved {
+  border-color: #cdb277;
+  background: #fff8e9;
+}
+
+.slot-tile.preparing,
+.slot-tile.placedinslot {
+  border-color: #e0b35f;
+  background: #fff1d9;
+}
+
+.slot-tile.ready,
+.slot-tile.readyforpickup {
+  border-color: #88c8ad;
+  background: #e8f8f0;
+}
+
+.slot-tile.available {
+  border-color: #dbe1d6;
+  background: #f7fbf5;
+}
+
+.reservation-row {
+  grid-template-columns: minmax(0, 0.8fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.event-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
 @media (max-width: 980px) {
   .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .evidence-grid {
     grid-template-columns: 1fr;
   }
 
@@ -345,13 +505,29 @@ h3 {
 
   .product-row,
   .board-item,
-  .receipt {
+  .receipt,
+  .reservation-row,
+  .event-row {
     align-items: stretch;
+    display: flex;
     flex-direction: column;
   }
 
   .product-row input {
     width: 100%;
   }
-}
 
+  .detail-grid,
+  .capacity-strip,
+  .slot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timeline {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-select {
+    width: 100%;
+  }
+}

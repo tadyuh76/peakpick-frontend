@@ -2,7 +2,10 @@ import type {
   AnalyticsSnapshot,
   CheckoutRequest,
   CheckoutResponse,
+  Order,
   NotificationLog,
+  PickupSlot,
+  PickupWindow,
   Product,
   SlotReservation,
   StaffBoardItem
@@ -41,6 +44,10 @@ export const peakpickApi = {
     });
   },
 
+  listOrders(): Promise<Order[]> {
+    return requestJson<Order[]>("/orders/orders");
+  },
+
   getStaffBoard(): Promise<StaffBoardItem[]> {
     return requestJson<StaffBoardItem[]>("/store/board");
   },
@@ -68,6 +75,14 @@ export const peakpickApi = {
     return requestJson<SlotReservation[]>("/slots/reservations");
   },
 
+  getPickupWindows(): Promise<PickupWindow[]> {
+    return requestJson<PickupWindow[]>("/slots/pickup-windows");
+  },
+
+  getSlots(): Promise<PickupSlot[]> {
+    return requestJson<PickupSlot[]>("/slots/slots");
+  },
+
   getNotifications(): Promise<NotificationLog[]> {
     return requestJson<NotificationLog[]>("/notifications/notifications");
   },
@@ -76,4 +91,3 @@ export const peakpickApi = {
     return requestJson<AnalyticsSnapshot>("/analytics/events");
   }
 };
-

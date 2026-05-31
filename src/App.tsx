@@ -1,8 +1,12 @@
 import {
+  Activity,
   BarChart3,
   Bell,
+  CalendarClock,
   CheckCircle2,
+  ClipboardList,
   Copy,
+  Layers3,
   PackageCheck,
   RefreshCw,
   ShoppingCart,
@@ -14,6 +18,9 @@ import type {
   AnalyticsSnapshot,
   CheckoutResponse,
   NotificationLog,
+  Order,
+  PickupSlot,
+  PickupWindow,
   Product,
   SlotReservation,
   StaffBoardItem
@@ -27,11 +34,15 @@ function App() {
   const [customerName, setCustomerName] = createSignal("Tad");
   const [pickupWindow, setPickupWindow] = createSignal(pickupWindows[1]);
   const [checkout, setCheckout] = createSignal<CheckoutResponse | null>(null);
+  const [orders, setOrders] = createSignal<Order[]>([]);
   const [board, setBoard] = createSignal<StaffBoardItem[]>([]);
+  const [pickupWindowMeta, setPickupWindowMeta] = createSignal<PickupWindow[]>([]);
+  const [slots, setSlots] = createSignal<PickupSlot[]>([]);
   const [reservations, setReservations] = createSignal<SlotReservation[]>([]);
   const [notifications, setNotifications] = createSignal<NotificationLog[]>([]);
   const [analytics, setAnalytics] = createSignal<AnalyticsSnapshot>({ counts: {}, recent_events: [] });
   const [pickupToken, setPickupToken] = createSignal("");
+  const [slotWindowFilter, setSlotWindowFilter] = createSignal(pickupWindows[1]);
   const [busy, setBusy] = createSignal(false);
   const [notice, setNotice] = createSignal("Frontend ready");
   const [error, setError] = createSignal("");
@@ -39,6 +50,11 @@ function App() {
   const latestBoardItem = createMemo(() => {
     const orderId = checkout()?.order.order_id;
     return board().find((item) => item.order_id === orderId) ?? board()[0];
+  });
+
+  const latestOrder = createMemo(() => {
+    const orderId = checkout()?.order.order_id;
+    return orders().find((order) => order.order_id === orderId) ?? checkout()?.order ?? orders()[0];
   });
 
   const selectedItems = createMemo(() =>
@@ -51,6 +67,32 @@ function App() {
     products().reduce((sum, product) => {
       return sum + product.price * (quantities()[product.sku] ?? 0);
     }, 0)
+  );
+
+  const filteredReservations = createMemo(() =>
+    reservations().filter((reservation) => reservation.pickup_window === slotWindowFilter())
+  );
+
+  const activeReservations = createMemo(() =>
+    filteredReservations().filter((reservation) => reservation.status !== "Available")
+  );
+
+  const slotCapacity = createMemo(() => {
+    const window = pickupWindowMeta().find((item) => item.pickup_window === slotWindowFilter());
+    return window?.capacity ?? slots().length;
+  });
+
+  const slotRows = createMemo(() =>
+    slots().map((slot) => {
+      const reservation = filteredReservations().find(
+        (item) => item.slot_id === slot.slot_id && item.status !== "Available"
+      );
+      return {
+        slot_id: slot.slot_id,
+        status: reservation?.status ?? "Available",
+        order_id: reservation?.order_id
+      };
+    })
   );
 
   onMount(async () => {
@@ -78,14 +120,28 @@ function App() {
   }
 
   async function refreshOperationalData() {
-    const [nextBoard, nextReservations, nextNotifications, nextAnalytics] = await Promise.all([
+    const [
+      nextOrders,
+      nextBoard,
+      nextReservations,
+      nextPickupWindows,
+      nextSlots,
+      nextNotifications,
+      nextAnalytics
+    ] = await Promise.all([
+      peakpickApi.listOrders(),
       peakpickApi.getStaffBoard(),
       peakpickApi.getSlotReservations(),
+      peakpickApi.getPickupWindows(),
+      peakpickApi.getSlots(),
       peakpickApi.getNotifications(),
       peakpickApi.getAnalytics()
     ]);
+    setOrders(nextOrders);
     setBoard(nextBoard);
     setReservations(nextReservations);
+    setPickupWindowMeta(nextPickupWindows);
+    setSlots(nextSlots);
     setNotifications(nextNotifications);
     setAnalytics(nextAnalytics);
     setPickupToken(latestBoardItem()?.token ?? pickupToken());
@@ -315,9 +371,141 @@ function App() {
           </div>
         </section>
       </section>
+
+      <section class="evidence-grid">
+        <section class="panel order-detail-panel">
+          <div class="panel-heading">
+            <ClipboardList size={19} />
+            <h2>Order detail</h2>
+          </div>
+
+          <Show when={latestOrder()} fallback={<p class="empty-state">No paid orders yet.</p>}>
+            {(order) => (
+              <>
+                <div class="detail-grid">
+                  <Detail label="Order" value={shortId(order().order_id)} />
+                  <Detail label="Payment" value={order().payment_status} />
+                  <Detail label="Status" value={order().order_status} />
+                  <Detail label="Window" value={order().pickup_window} />
+                </div>
+
+                <div class="timeline">
+                  <For each={orderSteps}>
+                    {(step) => (
+                      <div class={`timeline-step ${isStepReached(order().order_status, step) ? "active" : ""}`}>
+                        <span />
+                        <p>{step}</p>
+                      </div>
+                    )}
+                  </For>
+                </div>
+
+                <div class="item-stack">
+                  <For each={order().items}>
+                    {(item) => (
+                      <div class="compact-row">
+                        <span>{item.sku}</span>
+                        <strong>x{item.quantity}</strong>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </>
+            )}
+          </Show>
+        </section>
+
+        <section class="panel slot-dashboard-panel">
+          <div class="panel-heading split">
+            <div>
+              <Layers3 size={19} />
+              <h2>Slot capacity</h2>
+            </div>
+            <select
+              class="compact-select"
+              value={slotWindowFilter()}
+              onChange={(event) => setSlotWindowFilter(event.currentTarget.value)}
+            >
+              <For each={pickupWindows}>{(window) => <option value={window}>{window}</option>}</For>
+            </select>
+          </div>
+
+          <div class="capacity-strip">
+            <Metric label="Capacity" value={slotCapacity()} />
+            <Metric label="Used" value={activeReservations().length} />
+            <Metric label="Available" value={Math.max(slotCapacity() - activeReservations().length, 0)} />
+          </div>
+
+          <div class="slot-grid">
+            <For each={slotRows()}>
+              {(slot) => (
+                <div class={`slot-tile ${slot.status.toLowerCase()}`}>
+                  <strong>{slot.slot_id}</strong>
+                  <span>{slot.status}</span>
+                  <Show when={slot.order_id}>{(orderId) => <small>{shortId(orderId())}</small>}</Show>
+                </div>
+              )}
+            </For>
+          </div>
+        </section>
+
+        <section class="panel reservation-panel">
+          <div class="panel-heading">
+            <CalendarClock size={19} />
+            <h2>Reservations</h2>
+          </div>
+
+          <Show when={reservations().length > 0} fallback={<p class="empty-state">No reservations yet.</p>}>
+            <div class="table-list">
+              <For each={reservations().slice(0, 8)}>
+                {(reservation) => (
+                  <div class="reservation-row">
+                    <span>{shortId(reservation.order_id)}</span>
+                    <strong>{reservation.slot_id}</strong>
+                    <span>{reservation.pickup_window}</span>
+                    <StatusBadge value={reservation.status} />
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+        </section>
+
+        <section class="panel event-log-panel">
+          <div class="panel-heading">
+            <Activity size={19} />
+            <h2>Recent events</h2>
+          </div>
+
+          <Show when={analytics().recent_events.length > 0} fallback={<p class="empty-state">No events yet.</p>}>
+            <div class="event-list">
+              <For each={analytics().recent_events.slice(-8).reverse()}>
+                {(event) => (
+                  <div class="event-row">
+                    <strong>{event.event_type}</strong>
+                    <span>{shortId(event.aggregate_id)}</span>
+                    <small>{event.source}</small>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+        </section>
+      </section>
     </main>
   );
 }
+
+const orderSteps = ["Paid", "SlotAssigned", "Preparing", "ReadyForPickup", "Completed"];
+
+const orderStepRank: Record<string, number> = {
+  Paid: 0,
+  SlotAssigned: 1,
+  Preparing: 2,
+  PlacedInSlot: 3,
+  ReadyForPickup: 4,
+  Completed: 5
+};
 
 function Metric(props: { label: string; value: number }) {
   return (
@@ -328,8 +516,23 @@ function Metric(props: { label: string; value: number }) {
   );
 }
 
+function Detail(props: { label: string; value: string }) {
+  return (
+    <div class="detail">
+      <span>{props.label}</span>
+      <strong>{props.value}</strong>
+    </div>
+  );
+}
+
 function StatusBadge(props: { value: string }) {
   return <span class={`status-badge ${props.value.toLowerCase()}`}>{props.value}</span>;
+}
+
+function isStepReached(status: string, step: string) {
+  const statusRank = orderStepRank[status] ?? -1;
+  const stepRank = orderStepRank[step] ?? 0;
+  return statusRank >= stepRank;
 }
 
 function formatCurrency(value: number) {
@@ -345,4 +548,3 @@ function shortId(value: string) {
 }
 
 export default App;
-
