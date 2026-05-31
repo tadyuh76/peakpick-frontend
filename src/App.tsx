@@ -214,6 +214,16 @@ function App() {
         </div>
       </header>
 
+      <nav class="section-nav" aria-label="PeakPick console sections">
+        <a href="#checkout">Checkout</a>
+        <a href="#staff-board">Staff board</a>
+        <a href="#events">Events</a>
+        <a href="#order-detail">Order detail</a>
+        <a href="#slot-capacity">Slots</a>
+        <a href="#reservations">Reservations</a>
+        <a href="#event-log">Event log</a>
+      </nav>
+
       <Show when={error()}>
         <div class="alert" role="alert">
           {error()}
@@ -221,7 +231,7 @@ function App() {
       </Show>
 
       <section class="workspace">
-        <section class="panel order-panel">
+        <section class="panel order-panel" id="checkout">
           <div class="panel-heading">
             <ShoppingCart size={19} />
             <h2>Checkout</h2>
@@ -282,7 +292,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel staff-panel">
+        <section class="panel staff-panel" id="staff-board">
           <div class="panel-heading split">
             <div>
               <PackageCheck size={19} />
@@ -343,7 +353,7 @@ function App() {
           </div>
         </section>
 
-        <section class="panel insight-panel">
+        <section class="panel insight-panel" id="events">
           <div class="panel-heading">
             <BarChart3 size={19} />
             <h2>Events</h2>
@@ -373,7 +383,7 @@ function App() {
       </section>
 
       <section class="evidence-grid">
-        <section class="panel order-detail-panel">
+        <section class="panel order-detail-panel" id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
             <h2>Order detail</h2>
@@ -415,7 +425,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel slot-dashboard-panel">
+        <section class="panel slot-dashboard-panel" id="slot-capacity">
           <div class="panel-heading split">
             <div>
               <Layers3 size={19} />
@@ -449,7 +459,7 @@ function App() {
           </div>
         </section>
 
-        <section class="panel reservation-panel">
+        <section class="panel reservation-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
             <h2>Reservations</h2>
@@ -471,7 +481,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel event-log-panel">
+        <section class="panel event-log-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
             <h2>Recent events</h2>

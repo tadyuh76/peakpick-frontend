@@ -11,6 +11,14 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+:target {
+  scroll-margin-top: 76px;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -73,6 +81,44 @@ label {
   justify-content: space-between;
   gap: 18px;
   margin-bottom: 18px;
+}
+
+.section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  border: 1px solid #d6d8c7;
+  border-radius: 8px;
+  background: rgb(255 254 251 / 94%);
+  padding: 8px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.section-nav a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #4f574e;
+  flex: 0 0 auto;
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 0 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.section-nav a:hover,
+.section-nav a:focus-visible {
+  border-color: #ccd5ca;
+  background: #f3f8f1;
+  color: #17634d;
+  outline: none;
 }
 
 .eyebrow {
