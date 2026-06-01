@@ -28,15 +28,13 @@ import type {
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 const navItems = [
+  { id: "customer", label: "Customer" },
   { id: "operations", label: "Operations" },
-  { id: "order-detail", label: "Order detail" },
-  { id: "slot-capacity", label: "Slots" },
-  { id: "reservations", label: "Reservations" },
-  { id: "event-log", label: "Event log" }
+  { id: "evidence", label: "Evidence" }
 ];
 
 function App() {
-  const [activeView, setActiveView] = createSignal("operations");
+  const [activeView, setActiveView] = createSignal("customer");
   const [products, setProducts] = createSignal<Product[]>([]);
   const [quantities, setQuantities] = createSignal<Record<string, number>>({ coffee: 2, snack: 1 });
   const [customerName, setCustomerName] = createSignal("Tad");
@@ -252,7 +250,7 @@ function App() {
         </div>
       </Show>
 
-      <section class={`workspace view-section ${activeView() === "operations" ? "active" : ""}`}>
+      <section class={`customer-grid view-section ${activeView() === "customer" ? "active" : ""}`}>
         <section class="panel order-panel" id="checkout">
           <div class="panel-heading">
             <ShoppingCart size={19} />
@@ -314,6 +312,56 @@ function App() {
           </Show>
         </section>
 
+        <section class="panel customer-status-panel">
+          <div class="panel-heading">
+            <ClipboardList size={19} />
+            <h2>Pickup status</h2>
+          </div>
+
+          <Show when={latestOrder()} fallback={<p class="empty-state">Place an order to track your pickup.</p>}>
+            {(order) => (
+              <>
+                <div class="pickup-card">
+                  <div>
+                    <span>Pickup slot</span>
+                    <strong>{latestBoardItem()?.slot_id ?? "Assigning"}</strong>
+                  </div>
+                  <StatusBadge value={latestBoardItem()?.status ?? order().order_status} />
+                </div>
+
+                <div class="detail-grid">
+                  <Detail label="Order" value={shortId(order().order_id)} />
+                  <Detail label="Window" value={order().pickup_window} />
+                  <Detail label="Payment" value={order().payment_status} />
+                  <Detail label="Token" value={latestBoardItem()?.token ?? "Not ready"} />
+                </div>
+
+                <div class="timeline">
+                  <For each={orderSteps}>
+                    {(step) => (
+                      <div class={`timeline-step ${isStepReached(order().order_status, step) ? "active" : ""}`}>
+                        <span />
+                        <p>{step}</p>
+                      </div>
+                    )}
+                  </For>
+                </div>
+
+                <Show when={latestBoardItem()?.token}>
+                  {(token) => (
+                    <div class="token-card">
+                      <span>Show this token to staff</span>
+                      <strong>{token()}</strong>
+                    </div>
+                  )}
+                </Show>
+              </>
+            )}
+          </Show>
+        </section>
+      </section>
+
+      <section class={`workspace view-section ${activeView() === "operations" ? "active" : ""}`}>
         <section class="panel staff-panel" id="staff-board">
           <div class="panel-heading split">
             <div>
@@ -404,8 +452,8 @@ function App() {
         </section>
       </section>
 
-      <section class={`evidence-grid view-section ${activeView() !== "operations" ? "active" : ""}`}>
-        <section class={`panel order-detail-panel ${activeView() === "order-detail" ? "active-panel" : ""}`} id="order-detail">
+      <section class={`evidence-grid view-section ${activeView() === "evidence" ? "active" : ""}`}>
+        <section class="panel order-detail-panel active-panel" id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
             <h2>Order detail</h2>
@@ -447,7 +495,7 @@ function App() {
           </Show>
         </section>
 
-        <section class={`panel slot-dashboard-panel ${activeView() === "slot-capacity" ? "active-panel" : ""}`} id="slot-capacity">
+        <section class="panel slot-dashboard-panel active-panel" id="slot-capacity">
           <div class="panel-heading split">
             <div>
               <Layers3 size={19} />
@@ -481,7 +529,7 @@ function App() {
           </div>
         </section>
 
-        <section class={`panel reservation-panel ${activeView() === "reservations" ? "active-panel" : ""}`} id="reservations">
+        <section class="panel reservation-panel active-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
             <h2>Reservations</h2>
@@ -503,7 +551,7 @@ function App() {
           </Show>
         </section>
 
-        <section class={`panel event-log-panel ${activeView() === "event-log" ? "active-panel" : ""}`} id="event-log">
+        <section class="panel event-log-panel active-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
             <h2>Recent events</h2>
