@@ -27,8 +27,16 @@ import type {
 } from "./services/types";
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
+const navItems = [
+  { id: "operations", label: "Operations" },
+  { id: "order-detail", label: "Order detail" },
+  { id: "slot-capacity", label: "Slots" },
+  { id: "reservations", label: "Reservations" },
+  { id: "event-log", label: "Event log" }
+];
 
 function App() {
+  const [activeView, setActiveView] = createSignal("operations");
   const [products, setProducts] = createSignal<Product[]>([]);
   const [quantities, setQuantities] = createSignal<Record<string, number>>({ coffee: 2, snack: 1 });
   const [customerName, setCustomerName] = createSignal("Tad");
@@ -46,6 +54,7 @@ function App() {
   const [busy, setBusy] = createSignal(false);
   const [notice, setNotice] = createSignal("Frontend ready");
   const [error, setError] = createSignal("");
+  const [dataErrors, setDataErrors] = createSignal<Record<string, string>>({});
 
   const latestBoardItem = createMemo(() => {
     const orderId = checkout()?.order.order_id;
@@ -114,37 +123,39 @@ function App() {
   }
 
   async function loadProducts() {
-    await runAction("Catalog loaded", async () => {
-      setProducts(await peakpickApi.listProducts());
-    });
+    const loaded = await loadResource("Catalog", peakpickApi.listProducts, setProducts);
+    if (loaded) setNotice("Catalog loaded");
   }
 
   async function refreshOperationalData() {
-    const [
-      nextOrders,
-      nextBoard,
-      nextReservations,
-      nextPickupWindows,
-      nextSlots,
-      nextNotifications,
-      nextAnalytics
-    ] = await Promise.all([
-      peakpickApi.listOrders(),
-      peakpickApi.getStaffBoard(),
-      peakpickApi.getSlotReservations(),
-      peakpickApi.getPickupWindows(),
-      peakpickApi.getSlots(),
-      peakpickApi.getNotifications(),
-      peakpickApi.getAnalytics()
+    await Promise.all([
+      loadResource("Orders", peakpickApi.listOrders, setOrders),
+      loadResource("Staff board", peakpickApi.getStaffBoard, setBoard),
+      loadResource("Reservations", peakpickApi.getSlotReservations, setReservations),
+      loadResource("Pickup windows", peakpickApi.getPickupWindows, setPickupWindowMeta),
+      loadResource("Slots", peakpickApi.getSlots, setSlots),
+      loadResource("Notifications", peakpickApi.getNotifications, setNotifications),
+      loadResource("Analytics", peakpickApi.getAnalytics, setAnalytics)
     ]);
-    setOrders(nextOrders);
-    setBoard(nextBoard);
-    setReservations(nextReservations);
-    setPickupWindowMeta(nextPickupWindows);
-    setSlots(nextSlots);
-    setNotifications(nextNotifications);
-    setAnalytics(nextAnalytics);
     setPickupToken(latestBoardItem()?.token ?? pickupToken());
+  }
+
+  async function loadResource<T>(key: string, request: () => Promise<T>, setter: (value: T) => void) {
+    try {
+      setter(await request());
+      setDataErrors((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      return true;
+    } catch (err) {
+      setDataErrors((current) => ({
+        ...current,
+        [key]: err instanceof Error ? err.message : "Request failed"
+      }));
+      return false;
+    }
   }
 
   async function submitCheckout() {
@@ -215,13 +226,17 @@ function App() {
       </header>
 
       <nav class="section-nav" aria-label="PeakPick console sections">
-        <a href="#checkout">Checkout</a>
-        <a href="#staff-board">Staff board</a>
-        <a href="#events">Events</a>
-        <a href="#order-detail">Order detail</a>
-        <a href="#slot-capacity">Slots</a>
-        <a href="#reservations">Reservations</a>
-        <a href="#event-log">Event log</a>
+        <For each={navItems}>
+          {(item) => (
+            <button
+              class={activeView() === item.id ? "active" : ""}
+              type="button"
+              onClick={() => setActiveView(item.id)}
+            >
+              {item.label}
+            </button>
+          )}
+        </For>
       </nav>
 
       <Show when={error()}>
@@ -230,7 +245,14 @@ function App() {
         </div>
       </Show>
 
-      <section class="workspace">
+      <Show when={Object.keys(dataErrors()).length > 0}>
+        <div class="module-alert" role="status">
+          <strong>Some services are unavailable.</strong>
+          <span>{Object.keys(dataErrors()).join(", ")}</span>
+        </div>
+      </Show>
+
+      <section class={`workspace view-section ${activeView() === "operations" ? "active" : ""}`}>
         <section class="panel order-panel" id="checkout">
           <div class="panel-heading">
             <ShoppingCart size={19} />
@@ -382,8 +404,8 @@ function App() {
         </section>
       </section>
 
-      <section class="evidence-grid">
-        <section class="panel order-detail-panel" id="order-detail">
+      <section class={`evidence-grid view-section ${activeView() !== "operations" ? "active" : ""}`}>
+        <section class={`panel order-detail-panel ${activeView() === "order-detail" ? "active-panel" : ""}`} id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
             <h2>Order detail</h2>
@@ -425,7 +447,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel slot-dashboard-panel" id="slot-capacity">
+        <section class={`panel slot-dashboard-panel ${activeView() === "slot-capacity" ? "active-panel" : ""}`} id="slot-capacity">
           <div class="panel-heading split">
             <div>
               <Layers3 size={19} />
@@ -459,7 +481,7 @@ function App() {
           </div>
         </section>
 
-        <section class="panel reservation-panel" id="reservations">
+        <section class={`panel reservation-panel ${activeView() === "reservations" ? "active-panel" : ""}`} id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
             <h2>Reservations</h2>
@@ -481,7 +503,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel event-log-panel" id="event-log">
+        <section class={`panel event-log-panel ${activeView() === "event-log" ? "active-panel" : ""}`} id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
             <h2>Recent events</h2>
