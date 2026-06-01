@@ -6,13 +6,14 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
+  CreditCard,
   Layers3,
   PackageCheck,
   RefreshCw,
   ShoppingCart,
-  Truck
+  TicketCheck,
 } from "lucide-solid";
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
 import { peakpickApi } from "./services/api";
 import type {
   AnalyticsSnapshot,
@@ -29,8 +30,7 @@ import type {
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 const navItems = [
   { id: "customer", label: "Customer" },
-  { id: "operations", label: "Operations" },
-  { id: "evidence", label: "Evidence" }
+  { id: "admin", label: "Admin" }
 ];
 
 function App() {
@@ -48,20 +48,42 @@ function App() {
   const [notifications, setNotifications] = createSignal<NotificationLog[]>([]);
   const [analytics, setAnalytics] = createSignal<AnalyticsSnapshot>({ counts: {}, recent_events: [] });
   const [pickupToken, setPickupToken] = createSignal("");
-  const [slotWindowFilter, setSlotWindowFilter] = createSignal(pickupWindows[1]);
+  const [selectedOrderId, setSelectedOrderId] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [initialLoading, setInitialLoading] = createSignal(true);
   const [notice, setNotice] = createSignal("Frontend ready");
   const [error, setError] = createSignal("");
   const [dataErrors, setDataErrors] = createSignal<Record<string, string>>({});
 
-  const latestBoardItem = createMemo(() => {
-    const orderId = checkout()?.order.order_id;
-    return board().find((item) => item.order_id === orderId) ?? board()[0];
+  const availablePickupWindows = createMemo(() => {
+    const activeWindows = pickupWindowMeta()
+      .filter((item) => item.active)
+      .map((item) => item.pickup_window);
+    return activeWindows.length > 0 ? activeWindows : pickupWindows;
   });
 
-  const latestOrder = createMemo(() => {
+  const customerOrder = createMemo(() => {
     const orderId = checkout()?.order.order_id;
-    return orders().find((order) => order.order_id === orderId) ?? checkout()?.order ?? orders()[0];
+    if (!orderId) return null;
+    return orders().find((order) => order.order_id === orderId) ?? checkout()?.order ?? null;
+  });
+
+  const customerBoardItem = createMemo(() => {
+    const orderId = checkout()?.order.order_id;
+    if (!orderId) return null;
+    return board().find((item) => item.order_id === orderId) ?? null;
+  });
+
+  const selectedBoardItem = createMemo(() => {
+    const orderId = selectedOrderId();
+    if (!orderId) return null;
+    return board().find((item) => item.order_id === orderId) ?? null;
+  });
+
+  const selectedOrder = createMemo(() => {
+    const orderId = selectedOrderId();
+    if (!orderId) return null;
+    return orders().find((order) => order.order_id === orderId) ?? null;
   });
 
   const selectedItems = createMemo(() =>
@@ -76,35 +98,66 @@ function App() {
     }, 0)
   );
 
-  const filteredReservations = createMemo(() =>
-    reservations().filter((reservation) => reservation.pickup_window === slotWindowFilter())
-  );
+  const hasCheckoutInput = createMemo(() => customerName().trim().length > 0 && selectedItems().length > 0);
 
-  const activeReservations = createMemo(() =>
-    filteredReservations().filter((reservation) => reservation.status !== "Available")
-  );
-
-  const slotCapacity = createMemo(() => {
-    const window = pickupWindowMeta().find((item) => item.pickup_window === slotWindowFilter());
-    return window?.capacity ?? slots().length;
+  const canMarkPreparing = createMemo(() => {
+    const status = selectedBoardItem()?.status;
+    return status === "SlotAssigned";
   });
 
-  const slotRows = createMemo(() =>
-    slots().map((slot) => {
-      const reservation = filteredReservations().find(
-        (item) => item.slot_id === slot.slot_id && item.status !== "Available"
-      );
+  const canMarkReady = createMemo(() => {
+    const status = selectedBoardItem()?.status;
+    return status === "Preparing" || status === "PlacedInSlot";
+  });
+
+  const canVerifyPickup = createMemo(
+    () => selectedBoardItem()?.status === "ReadyForPickup" && pickupToken().trim().length > 0
+  );
+
+  const slotDashboardRows = createMemo(() =>
+    availablePickupWindows().map((window) => {
+      const windowMeta = pickupWindowMeta().find((item) => item.pickup_window === window);
+      const windowReservations = reservations().filter((reservation) => reservation.pickup_window === window);
+      const activeReservations = windowReservations.filter((reservation) => reservation.status !== "Available");
+      const capacity = windowMeta?.capacity ?? slots().length;
+      const slotRows = slots().map((slot) => {
+        const reservation = windowReservations.find(
+          (item) => item.slot_id === slot.slot_id && item.status !== "Available"
+        );
+        return {
+          slot_id: slot.slot_id,
+          status: reservation?.status ?? "Available",
+          order_id: reservation?.order_id
+        };
+      });
       return {
-        slot_id: slot.slot_id,
-        status: reservation?.status ?? "Available",
-        order_id: reservation?.order_id
+        pickup_window: window,
+        capacity,
+        used: activeReservations.length,
+        available: Math.max(capacity - activeReservations.length, 0),
+        slotRows
       };
     })
   );
 
   onMount(async () => {
-    await loadProducts();
-    await refreshOperationalData();
+    try {
+      await loadProducts();
+      await refreshOperationalData();
+    } finally {
+      setInitialLoading(false);
+    }
+  });
+
+  createEffect(() => {
+    const currentSelection = selectedOrderId();
+    if (currentSelection && board().some((item) => item.order_id === currentSelection)) return;
+    setSelectedOrderId(board()[0]?.order_id ?? "");
+  });
+
+  createEffect(() => {
+    const item = selectedBoardItem();
+    setPickupToken(item?.token ?? "");
   });
 
   async function runAction(label: string, action: () => Promise<void>) {
@@ -135,7 +188,6 @@ function App() {
       loadResource("Notifications", peakpickApi.getNotifications, setNotifications),
       loadResource("Analytics", peakpickApi.getAnalytics, setAnalytics)
     ]);
-    setPickupToken(latestBoardItem()?.token ?? pickupToken());
   }
 
   async function loadResource<T>(key: string, request: () => Promise<T>, setter: (value: T) => void) {
@@ -164,6 +216,7 @@ function App() {
         items: selectedItems()
       });
       setCheckout(response);
+      setSelectedOrderId(response.order.order_id);
       setPickupToken("");
       await new Promise((resolve) => setTimeout(resolve, 600));
       await refreshOperationalData();
@@ -171,7 +224,7 @@ function App() {
   }
 
   async function markPreparing() {
-    const item = latestBoardItem();
+    const item = selectedBoardItem();
     if (!item) return;
     await runAction("OrderPreparing published", async () => {
       await peakpickApi.markPreparing(item.order_id);
@@ -180,7 +233,7 @@ function App() {
   }
 
   async function markReady() {
-    const item = latestBoardItem();
+    const item = selectedBoardItem();
     if (!item) return;
     await runAction("OrderReady published", async () => {
       const updated = await peakpickApi.markReady(item.order_id);
@@ -190,8 +243,8 @@ function App() {
   }
 
   async function verifyPickup() {
-    const item = latestBoardItem();
-    const token = pickupToken() || item?.token;
+    const item = selectedBoardItem();
+    const token = pickupToken().trim() || item?.token;
     if (!item || !token) return;
     await runAction("OrderPickedUp published", async () => {
       await peakpickApi.verifyPickup(item.order_id, token);
@@ -265,28 +318,33 @@ function App() {
           <label>
             Pickup window
             <select value={pickupWindow()} onChange={(event) => setPickupWindow(event.currentTarget.value)}>
-              <For each={pickupWindows}>{(window) => <option value={window}>{window}</option>}</For>
+              <For each={availablePickupWindows()}>{(window) => <option value={window}>{window}</option>}</For>
             </select>
           </label>
 
           <div class="product-list">
-            <For each={products()}>
-              {(product) => (
-                <div class="product-row">
-                  <div>
-                    <strong>{product.name}</strong>
-                    <span>{formatCurrency(product.price)}</span>
+            <Show
+              when={!initialLoading() && products().length > 0}
+              fallback={<p class="empty-state">{initialLoading() ? "Loading products..." : "No products available."}</p>}
+            >
+              <For each={products()}>
+                {(product) => (
+                  <div class="product-row">
+                    <div>
+                      <strong>{product.name}</strong>
+                      <span>{formatCurrency(product.price)}</span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={quantities()[product.sku] ?? 0}
+                      onInput={(event) => updateQuantity(product.sku, Number(event.currentTarget.value))}
+                      aria-label={`${product.name} quantity`}
+                    />
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    value={quantities()[product.sku] ?? 0}
-                    onInput={(event) => updateQuantity(product.sku, Number(event.currentTarget.value))}
-                    aria-label={`${product.name} quantity`}
-                  />
-                </div>
-              )}
-            </For>
+                )}
+              </For>
+            </Show>
           </div>
 
           <div class="summary-line">
@@ -294,15 +352,18 @@ function App() {
             <strong>{formatCurrency(total())}</strong>
           </div>
 
-          <button class="primary-action" disabled={busy() || selectedItems().length === 0} onClick={submitCheckout}>
-            <Truck size={18} />
+          <button class="primary-action" disabled={busy() || !hasCheckoutInput()} onClick={submitCheckout}>
+            <CreditCard size={18} />
             Create paid order
           </button>
+          <Show when={!hasCheckoutInput()}>
+            <p class="helper-text">Enter a customer name and choose at least one item.</p>
+          </Show>
 
           <Show when={checkout()}>
             {(result) => (
-              <div class="receipt">
-                <span>Order</span>
+              <div class="receipt success">
+                <span>Paid order created</span>
                 <button class="ghost-action" onClick={copyOrderId} title="Copy order ID">
                   <Copy size={16} />
                   {shortId(result().order.order_id)}
@@ -318,28 +379,32 @@ function App() {
             <h2>Pickup status</h2>
           </div>
 
-          <Show when={latestOrder()} fallback={<p class="empty-state">Place an order to track your pickup.</p>}>
+          <Show when={customerOrder()} fallback={<p class="empty-state">Place an order to track your pickup.</p>}>
             {(order) => (
               <>
                 <div class="pickup-card">
                   <div>
                     <span>Pickup slot</span>
-                    <strong>{latestBoardItem()?.slot_id ?? "Assigning"}</strong>
+                    <strong>{customerBoardItem()?.slot_id ?? "Assigning"}</strong>
                   </div>
-                  <StatusBadge value={latestBoardItem()?.status ?? order().order_status} />
+                  <StatusBadge value={customerBoardItem()?.status ?? order().order_status} />
                 </div>
 
                 <div class="detail-grid">
-                  <Detail label="Order" value={shortId(order().order_id)} />
+                  <Detail label="Order ID" value={order().order_id} />
                   <Detail label="Window" value={order().pickup_window} />
+                  <Detail label="Assigned slot" value={customerBoardItem()?.slot_id ?? "Assigning"} />
+                  <Detail label="Current status" value={customerBoardItem()?.status ?? order().order_status} />
                   <Detail label="Payment" value={order().payment_status} />
-                  <Detail label="Token" value={latestBoardItem()?.token ?? "Not ready"} />
+                  <Detail label="Pickup token" value={customerBoardItem()?.token ?? "Not ready"} />
                 </div>
 
                 <div class="timeline">
                   <For each={orderSteps}>
                     {(step) => (
-                      <div class={`timeline-step ${isStepReached(order().order_status, step) ? "active" : ""}`}>
+                      <div
+                        class={`timeline-step ${isStepReached(customerBoardItem()?.status ?? order().order_status, step) ? "active" : ""}`}
+                      >
                         <span />
                         <p>{step}</p>
                       </div>
@@ -347,7 +412,7 @@ function App() {
                   </For>
                 </div>
 
-                <Show when={latestBoardItem()?.token}>
+                <Show when={customerBoardItem()?.token}>
                   {(token) => (
                     <div class="token-card">
                       <span>Show this token to staff</span>
@@ -361,37 +426,56 @@ function App() {
         </section>
       </section>
 
-      <section class={`workspace view-section ${activeView() === "operations" ? "active" : ""}`}>
+      <section class={`admin-grid view-section ${activeView() === "admin" ? "active" : ""}`}>
         <section class="panel staff-panel" id="staff-board">
           <div class="panel-heading split">
             <div>
               <PackageCheck size={19} />
-              <h2>Staff board</h2>
+              <h2>Staff workflow</h2>
             </div>
             <button class="icon-action" onClick={() => runAction("Board refreshed", refreshOperationalData)} title="Refresh">
               <RefreshCw size={17} />
             </button>
           </div>
 
-          <Show when={latestBoardItem()} fallback={<p class="empty-state">No assigned slots yet.</p>}>
+          <Show when={board().length > 0} fallback={<p class="empty-state">No assigned slots yet.</p>}>
+            <div class="board-list">
+              <For each={board()}>
+                {(item) => (
+                  <button
+                    class={`board-item ${selectedOrderId() === item.order_id ? "selected" : ""}`}
+                    type="button"
+                    onClick={() => setSelectedOrderId(item.order_id)}
+                  >
+                    <div class="board-main">
+                      <strong>{item.slot_id}</strong>
+                      <span>{item.pickup_window}</span>
+                    </div>
+                    <StatusBadge value={item.status} />
+                    <p>{shortId(item.order_id)}</p>
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={selectedBoardItem()}>
             {(item) => (
-              <div class="board-item">
-                <div class="board-main">
-                  <strong>{item().slot_id}</strong>
-                  <span>{item().pickup_window}</span>
-                </div>
-                <StatusBadge value={item().status} />
-                <p>{shortId(item().order_id)}</p>
+              <div class="selected-order-card">
+                <Detail label="Selected order" value={item().order_id} />
+                <Detail label="Slot" value={item().slot_id} />
+                <Detail label="Window" value={item().pickup_window} />
+                <Detail label="Status" value={item().status} />
               </div>
             )}
           </Show>
 
           <div class="staff-actions">
-            <button disabled={busy() || !latestBoardItem()} onClick={markPreparing}>
+            <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
               <RefreshCw size={17} />
               Preparing
             </button>
-            <button disabled={busy() || !latestBoardItem()} onClick={markReady}>
+            <button disabled={busy() || !canMarkReady()} onClick={markReady}>
               <CheckCircle2 size={17} />
               Ready
             </button>
@@ -403,30 +487,22 @@ function App() {
               value={pickupToken()}
               onInput={(event) => setPickupToken(event.currentTarget.value)}
               placeholder="PK-XXXXXX"
+              disabled={!selectedBoardItem()}
             />
           </label>
 
-          <button class="primary-action confirm" disabled={busy() || !latestBoardItem()} onClick={verifyPickup}>
-            <CheckCircle2 size={18} />
+          <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
+            <TicketCheck size={18} />
             Verify pickup
           </button>
 
-          <div class="slot-list">
-            <For each={reservations().slice(0, 4)}>
-              {(reservation) => (
-                <div class="slot-row">
-                  <span>{reservation.slot_id}</span>
-                  <StatusBadge value={reservation.status} />
-                </div>
-              )}
-            </For>
-          </div>
+          <p class="helper-text">Controls unlock only for the selected order's next valid lifecycle step.</p>
         </section>
 
         <section class="panel insight-panel" id="events">
           <div class="panel-heading">
             <BarChart3 size={19} />
-            <h2>Events</h2>
+            <h2>System evidence</h2>
           </div>
 
           <div class="metric-grid">
@@ -450,29 +526,29 @@ function App() {
             </Show>
           </div>
         </section>
-      </section>
 
-      <section class={`evidence-grid view-section ${activeView() === "evidence" ? "active" : ""}`}>
-        <section class="panel order-detail-panel active-panel" id="order-detail">
+        <section class="panel order-detail-panel" id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
             <h2>Order detail</h2>
           </div>
 
-          <Show when={latestOrder()} fallback={<p class="empty-state">No paid orders yet.</p>}>
+          <Show when={selectedOrder()} fallback={<p class="empty-state">Select an assigned order to inspect order detail.</p>}>
             {(order) => (
               <>
                 <div class="detail-grid">
-                  <Detail label="Order" value={shortId(order().order_id)} />
+                  <Detail label="Order ID" value={order().order_id} />
                   <Detail label="Payment" value={order().payment_status} />
-                  <Detail label="Status" value={order().order_status} />
+                  <Detail label="Order status" value={order().order_status} />
                   <Detail label="Window" value={order().pickup_window} />
                 </div>
 
                 <div class="timeline">
                   <For each={orderSteps}>
                     {(step) => (
-                      <div class={`timeline-step ${isStepReached(order().order_status, step) ? "active" : ""}`}>
+                      <div
+                        class={`timeline-step ${isStepReached(selectedBoardItem()?.status ?? order().order_status, step) ? "active" : ""}`}
+                      >
                         <span />
                         <p>{step}</p>
                       </div>
@@ -495,41 +571,41 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel slot-dashboard-panel active-panel" id="slot-capacity">
-          <div class="panel-heading split">
-            <div>
-              <Layers3 size={19} />
-              <h2>Slot capacity</h2>
-            </div>
-            <select
-              class="compact-select"
-              value={slotWindowFilter()}
-              onChange={(event) => setSlotWindowFilter(event.currentTarget.value)}
-            >
-              <For each={pickupWindows}>{(window) => <option value={window}>{window}</option>}</For>
-            </select>
+        <section class="panel slot-dashboard-panel" id="slot-capacity">
+          <div class="panel-heading">
+            <Layers3 size={19} />
+            <h2>Slot capacity by pickup window</h2>
           </div>
 
-          <div class="capacity-strip">
-            <Metric label="Capacity" value={slotCapacity()} />
-            <Metric label="Used" value={activeReservations().length} />
-            <Metric label="Available" value={Math.max(slotCapacity() - activeReservations().length, 0)} />
-          </div>
-
-          <div class="slot-grid">
-            <For each={slotRows()}>
-              {(slot) => (
-                <div class={`slot-tile ${slot.status.toLowerCase()}`}>
-                  <strong>{slot.slot_id}</strong>
-                  <span>{slot.status}</span>
-                  <Show when={slot.order_id}>{(orderId) => <small>{shortId(orderId())}</small>}</Show>
+          <For each={slotDashboardRows()}>
+            {(window) => (
+              <div class="window-capacity">
+                <div class="window-title">
+                  <h3>{window.pickup_window}</h3>
+                  <span>{window.used}/{window.capacity} used</span>
                 </div>
-              )}
-            </For>
-          </div>
+                <div class="capacity-strip">
+                  <Metric label="Capacity" value={window.capacity} />
+                  <Metric label="Used" value={window.used} />
+                  <Metric label="Available" value={window.available} />
+                </div>
+                <div class="slot-grid">
+                  <For each={window.slotRows}>
+                    {(slot) => (
+                      <div class={`slot-tile ${slot.status.toLowerCase()}`}>
+                        <strong>{slot.slot_id}</strong>
+                        <span>{slot.status}</span>
+                        <Show when={slot.order_id}>{(orderId) => <small>{shortId(orderId())}</small>}</Show>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            )}
+          </For>
         </section>
 
-        <section class="panel reservation-panel active-panel" id="reservations">
+        <section class="panel reservation-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
             <h2>Reservations</h2>
@@ -551,7 +627,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel event-log-panel active-panel" id="event-log">
+        <section class="panel event-log-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
             <h2>Recent events</h2>

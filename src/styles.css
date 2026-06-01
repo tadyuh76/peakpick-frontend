@@ -200,13 +200,6 @@ h3 {
   display: grid;
 }
 
-.workspace {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr 0.95fr;
-  gap: 14px;
-  align-items: start;
-}
-
 .customer-grid {
   display: grid;
   grid-template-columns: 1.05fr 1fr;
@@ -214,24 +207,15 @@ h3 {
   align-items: start;
 }
 
-.evidence-grid {
+.admin-grid {
   display: grid;
-  grid-template-columns: 1fr 1.25fr;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
-  margin-top: 14px;
 }
 
 .view-section:not(.active) {
   display: none;
-}
-
-.evidence-grid .panel {
-  display: none;
-}
-
-.evidence-grid .panel.active-panel {
-  display: grid;
 }
 
 .panel {
@@ -265,7 +249,7 @@ h3 {
 }
 
 .product-list,
-.slot-list,
+.board-list,
 .feed {
   display: grid;
   gap: 8px;
@@ -348,6 +332,17 @@ h3 {
   background: #f3f8f1;
 }
 
+.receipt.success {
+  border-color: #95cdb6;
+  background: #f0fbf5;
+}
+
+.helper-text {
+  color: #667067;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
 .primary-action {
   width: 100%;
   border-color: #24745f;
@@ -369,6 +364,13 @@ h3 {
 
 .board-item {
   align-items: flex-start;
+  width: 100%;
+  text-align: left;
+}
+
+.board-item.selected {
+  border-color: #24745f;
+  background: #f3f8f1;
 }
 
 .board-main {
@@ -383,6 +385,12 @@ h3 {
 .staff-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.selected-order-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -427,6 +435,35 @@ h3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.slot-dashboard-panel {
+  grid-column: 1 / -1;
+}
+
+.window-capacity {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #e6e8dd;
+  padding-top: 14px;
+}
+
+.window-capacity:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.window-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.window-title span {
+  color: #667067;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .metric {
@@ -607,9 +644,8 @@ h3 {
 }
 
 @media (max-width: 980px) {
-  .workspace,
   .customer-grid,
-  .evidence-grid {
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 
@@ -640,6 +676,7 @@ h3 {
   }
 
   .detail-grid,
+  .selected-order-card,
   .capacity-strip,
   .slot-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
