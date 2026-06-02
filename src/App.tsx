@@ -13,7 +13,7 @@ import {
   ShoppingCart,
   TicketCheck,
 } from "lucide-solid";
-import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { peakpickApi } from "./services/api";
 import type {
   AnalyticsSnapshot,
@@ -28,13 +28,14 @@ import type {
 } from "./services/types";
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
+type RouteId = "customer" | "admin";
 const navItems = [
-  { id: "customer", label: "Customer" },
-  { id: "admin", label: "Admin" }
-];
+  { id: "customer" as const, label: "Customer", path: "/user" },
+  { id: "admin" as const, label: "Admin", path: "/admin" }
+] satisfies Array<{ id: RouteId; label: string; path: string }>;
 
 function App() {
-  const [activeView, setActiveView] = createSignal("customer");
+  const [activeView, setActiveView] = createSignal<RouteId>(routeFromPath(window.location.pathname));
   const [products, setProducts] = createSignal<Product[]>([]);
   const [quantities, setQuantities] = createSignal<Record<string, number>>({ coffee: 2, snack: 1 });
   const [customerName, setCustomerName] = createSignal("Tad");
@@ -55,11 +56,29 @@ function App() {
   const [error, setError] = createSignal("");
   const [dataErrors, setDataErrors] = createSignal<Record<string, string>>({});
 
-  const availablePickupWindows = createMemo(() => {
-    const activeWindows = pickupWindowMeta()
-      .filter((item) => item.active)
-      .map((item) => item.pickup_window);
-    return activeWindows.length > 0 ? activeWindows : pickupWindows;
+  const pickupWindowOptions = createMemo(() => {
+    const activeWindows = pickupWindowMeta().filter((item) => item.active);
+    const windows =
+      activeWindows.length > 0
+        ? activeWindows
+        : pickupWindows.map((window) => ({ pickup_window: window, capacity: slots().length || 8, active: true }));
+    return windows.map((window) => {
+      const used = reservations().filter(
+        (reservation) => reservation.pickup_window === window.pickup_window && reservation.status !== "Available"
+      ).length;
+      return {
+        pickup_window: window.pickup_window,
+        capacity: window.capacity,
+        used,
+        available: Math.max(window.capacity - used, 0)
+      };
+    });
+  });
+
+  const selectablePickupWindows = createMemo(() => pickupWindowOptions().filter((window) => window.available > 0));
+
+  const selectedPickupWindowOption = createMemo(() => {
+    return pickupWindowOptions().find((window) => window.pickup_window === pickupWindow());
   });
 
   const customerOrder = createMemo(() => {
@@ -98,7 +117,13 @@ function App() {
     }, 0)
   );
 
-  const hasCheckoutInput = createMemo(() => customerName().trim().length > 0 && selectedItems().length > 0);
+  const hasCheckoutInput = createMemo(
+    () => customerName().trim().length > 0 && selectedItems().length > 0 && (selectedPickupWindowOption()?.available ?? 0) > 0
+  );
+
+  const pageTitle = createMemo(() =>
+    activeView() === "customer" ? "Customer pickup order" : "Admin order and slot console"
+  );
 
   const canMarkPreparing = createMemo(() => {
     const status = selectedBoardItem()?.status;
@@ -115,11 +140,9 @@ function App() {
   );
 
   const slotDashboardRows = createMemo(() =>
-    availablePickupWindows().map((window) => {
-      const windowMeta = pickupWindowMeta().find((item) => item.pickup_window === window);
-      const windowReservations = reservations().filter((reservation) => reservation.pickup_window === window);
+    pickupWindowOptions().map((window) => {
+      const windowReservations = reservations().filter((reservation) => reservation.pickup_window === window.pickup_window);
       const activeReservations = windowReservations.filter((reservation) => reservation.status !== "Available");
-      const capacity = windowMeta?.capacity ?? slots().length;
       const slotRows = slots().map((slot) => {
         const reservation = windowReservations.find(
           (item) => item.slot_id === slot.slot_id && item.status !== "Available"
@@ -131,22 +154,29 @@ function App() {
         };
       });
       return {
-        pickup_window: window,
-        capacity,
+        pickup_window: window.pickup_window,
+        capacity: window.capacity,
         used: activeReservations.length,
-        available: Math.max(capacity - activeReservations.length, 0),
+        available: Math.max(window.capacity - activeReservations.length, 0),
         slotRows
       };
     })
   );
 
+  const syncRoute = () => setActiveView(routeFromPath(window.location.pathname));
+
   onMount(async () => {
+    window.addEventListener("popstate", syncRoute);
     try {
       await loadProducts();
       await refreshOperationalData();
     } finally {
       setInitialLoading(false);
     }
+  });
+
+  onCleanup(() => {
+    window.removeEventListener("popstate", syncRoute);
   });
 
   createEffect(() => {
@@ -158,6 +188,13 @@ function App() {
   createEffect(() => {
     const item = selectedBoardItem();
     setPickupToken(item?.token ?? "");
+  });
+
+  createEffect(() => {
+    const current = selectedPickupWindowOption();
+    const firstAvailable = selectablePickupWindows()[0];
+    if ((current?.available ?? 0) > 0 || !firstAvailable) return;
+    setPickupWindow(firstAvailable.pickup_window);
   });
 
   async function runAction(label: string, action: () => Promise<void>) {
@@ -263,12 +300,19 @@ function App() {
     setNotice("Order ID copied");
   }
 
+  function navigateToRoute(route: RouteId, path: string) {
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, "", path);
+    }
+    setActiveView(route);
+  }
+
   return (
     <main class="app-shell">
       <header class="topbar">
         <div>
           <p class="eyebrow">PeakPick</p>
-          <h1>Pickup operations console</h1>
+          <h1>{pageTitle()}</h1>
         </div>
         <div class="status-strip">
           <span class="status-dot" />
@@ -276,16 +320,19 @@ function App() {
         </div>
       </header>
 
-      <nav class="section-nav" aria-label="PeakPick console sections">
+      <nav class="section-nav" aria-label="PeakPick role links">
         <For each={navItems}>
           {(item) => (
-            <button
+            <a
               class={activeView() === item.id ? "active" : ""}
-              type="button"
-              onClick={() => setActiveView(item.id)}
+              href={item.path}
+              onClick={(event) => {
+                event.preventDefault();
+                navigateToRoute(item.id, item.path);
+              }}
             >
               {item.label}
-            </button>
+            </a>
           )}
         </For>
       </nav>
@@ -307,7 +354,7 @@ function App() {
         <section class="panel order-panel" id="checkout">
           <div class="panel-heading">
             <ShoppingCart size={19} />
-            <h2>Checkout</h2>
+            <h2>Browse and checkout</h2>
           </div>
 
           <label>
@@ -318,7 +365,13 @@ function App() {
           <label>
             Pickup window
             <select value={pickupWindow()} onChange={(event) => setPickupWindow(event.currentTarget.value)}>
-              <For each={availablePickupWindows()}>{(window) => <option value={window}>{window}</option>}</For>
+              <For each={pickupWindowOptions()}>
+                {(window) => (
+                  <option value={window.pickup_window} disabled={window.available <= 0}>
+                    {window.pickup_window} - {window.available} slots left
+                  </option>
+                )}
+              </For>
             </select>
           </label>
 
@@ -357,7 +410,9 @@ function App() {
             Create paid order
           </button>
           <Show when={!hasCheckoutInput()}>
-            <p class="helper-text">Enter a customer name and choose at least one item.</p>
+            <p class="helper-text">
+              Enter a customer name, choose at least one item, and pick a window with available slots.
+            </p>
           </Show>
 
           <Show when={checkout()}>
@@ -385,7 +440,7 @@ function App() {
                 <div class="pickup-card">
                   <div>
                     <span>Pickup slot</span>
-                    <strong>{customerBoardItem()?.slot_id ?? "Assigning"}</strong>
+                    <strong>{pickupSlotLabel(order().order_status, customerBoardItem())}</strong>
                   </div>
                   <StatusBadge value={customerBoardItem()?.status ?? order().order_status} />
                 </div>
@@ -393,11 +448,15 @@ function App() {
                 <div class="detail-grid">
                   <Detail label="Order ID" value={order().order_id} />
                   <Detail label="Window" value={order().pickup_window} />
-                  <Detail label="Assigned slot" value={customerBoardItem()?.slot_id ?? "Assigning"} />
+                  <Detail label="Assigned slot" value={pickupSlotLabel(order().order_status, customerBoardItem())} />
                   <Detail label="Current status" value={customerBoardItem()?.status ?? order().order_status} />
                   <Detail label="Payment" value={order().payment_status} />
                   <Detail label="Pickup token" value={customerBoardItem()?.token ?? "Not ready"} />
                 </div>
+
+                <Show when={order().order_status === "SlotAssignmentFailed"}>
+                  <p class="empty-state">No pickup slot is available for that window. Please create a new order with another pickup window.</p>
+                </Show>
 
                 <div class="timeline">
                   <For each={orderSteps}>
@@ -414,9 +473,12 @@ function App() {
 
                 <Show when={customerBoardItem()?.token}>
                   {(token) => (
-                    <div class="token-card">
-                      <span>Show this token to staff</span>
-                      <strong>{token()}</strong>
+                <div class="token-card">
+                      <div>
+                        <span>QR pickup code</span>
+                        <strong>{token()}</strong>
+                      </div>
+                      <PickupCode token={token()} />
                     </div>
                   )}
                 </Show>
@@ -685,6 +747,23 @@ function StatusBadge(props: { value: string }) {
   return <span class={`status-badge ${props.value.toLowerCase()}`}>{props.value}</span>;
 }
 
+function pickupSlotLabel(orderStatus: string, boardItem: StaffBoardItem | null) {
+  if (boardItem?.slot_id) return boardItem.slot_id;
+  if (orderStatus === "SlotAssignmentFailed") return "No slot";
+  return "Assigning";
+}
+
+function PickupCode(props: { token: string }) {
+  const cells = createMemo(() => pickupCodeCells(props.token));
+  return (
+    <div class="pickup-code" aria-label={`Pickup QR-style code for ${props.token}`}>
+      <For each={cells()}>
+        {(filled) => <span class={filled ? "filled" : ""} />}
+      </For>
+    </div>
+  );
+}
+
 function isStepReached(status: string, step: string) {
   const statusRank = orderStepRank[status] ?? -1;
   const stepRank = orderStepRank[step] ?? 0;
@@ -701,6 +780,28 @@ function formatCurrency(value: number) {
 
 function shortId(value: string) {
   return value.replace("order-", "").slice(0, 8);
+}
+
+function routeFromPath(pathname: string): RouteId {
+  return pathname.startsWith("/admin") ? "admin" : "customer";
+}
+
+function pickupCodeCells(token: string) {
+  let seed = 0;
+  for (const character of token) {
+    seed = (seed * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return Array.from({ length: 49 }, (_, index) => {
+    const row = Math.floor(index / 7);
+    const col = index % 7;
+    const finder =
+      (row <= 1 && col <= 1) ||
+      (row <= 1 && col >= 5) ||
+      (row >= 5 && col <= 1);
+    if (finder) return true;
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed % 3 !== 0;
+  });
 }
 
 export default App;
