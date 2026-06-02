@@ -29,10 +29,23 @@ import type {
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 type RouteId = "customer" | "admin";
-const navItems = [
-  { id: "customer" as const, label: "Customer", path: "/user" },
-  { id: "admin" as const, label: "Admin", path: "/admin" }
-] satisfies Array<{ id: RouteId; label: string; path: string }>;
+const routeLinks = {
+  customer: { id: "customer" as const, label: "Customer", path: "/user" },
+  admin: { id: "admin" as const, label: "Admin", path: "/admin" }
+};
+const sectionNavItems = {
+  customer: [
+    { label: "Browse", href: "#checkout" },
+    { label: "Pickup status", href: "#pickup-status" }
+  ],
+  admin: [
+    { label: "Staff", href: "#staff-board" },
+    { label: "Evidence", href: "#system-evidence" },
+    { label: "Capacity", href: "#slot-capacity" },
+    { label: "Reservations", href: "#reservations" },
+    { label: "Events", href: "#event-log" }
+  ]
+} satisfies Record<RouteId, Array<{ label: string; href: string }>>;
 
 function App() {
   const [activeView, setActiveView] = createSignal<RouteId>(routeFromPath(window.location.pathname));
@@ -124,6 +137,8 @@ function App() {
   const pageTitle = createMemo(() =>
     activeView() === "customer" ? "Customer pickup order" : "Admin order and slot console"
   );
+  const roleSwitchLink = createMemo(() => (activeView() === "customer" ? routeLinks.admin : routeLinks.customer));
+  const activeSectionNavItems = createMemo(() => sectionNavItems[activeView()]);
 
   const canMarkPreparing = createMemo(() => {
     const status = selectedBoardItem()?.status;
@@ -314,23 +329,28 @@ function App() {
           <p class="eyebrow">PeakPick</p>
           <h1>{pageTitle()}</h1>
         </div>
-        <div class="status-strip">
-          <span class="status-dot" />
-          <span>{notice()}</span>
+        <div class="topbar-actions">
+          <div class="status-strip">
+            <span class="status-dot" />
+            <span>{notice()}</span>
+          </div>
+          <a
+            class="role-switch"
+            href={roleSwitchLink().path}
+            onClick={(event) => {
+              event.preventDefault();
+              navigateToRoute(roleSwitchLink().id, roleSwitchLink().path);
+            }}
+          >
+            Open {roleSwitchLink().label}
+          </a>
         </div>
       </header>
 
-      <nav class="section-nav" aria-label="PeakPick role links">
-        <For each={navItems}>
+      <nav class="section-nav" aria-label={`${pageTitle()} sections`}>
+        <For each={activeSectionNavItems()}>
           {(item) => (
-            <a
-              class={activeView() === item.id ? "active" : ""}
-              href={item.path}
-              onClick={(event) => {
-                event.preventDefault();
-                navigateToRoute(item.id, item.path);
-              }}
-            >
+            <a href={item.href}>
               {item.label}
             </a>
           )}
@@ -428,7 +448,7 @@ function App() {
           </Show>
         </section>
 
-        <section class="panel customer-status-panel">
+        <section class="panel customer-status-panel" id="pickup-status">
           <div class="panel-heading">
             <ClipboardList size={19} />
             <h2>Pickup status</h2>
@@ -561,7 +581,7 @@ function App() {
           <p class="helper-text">Controls unlock only for the selected order's next valid lifecycle step.</p>
         </section>
 
-        <section class="panel insight-panel" id="events">
+        <section class="panel insight-panel" id="system-evidence">
           <div class="panel-heading">
             <BarChart3 size={19} />
             <h2>System evidence</h2>
