@@ -347,15 +347,17 @@ function App() {
         </div>
       </header>
 
-      <nav class="section-nav" aria-label={`${pageTitle()} sections`}>
-        <For each={activeSectionNavItems()}>
-          {(item) => (
-            <a href={item.href}>
-              {item.label}
-            </a>
-          )}
-        </For>
-      </nav>
+      <Show when={activeView() === "admin"}>
+        <nav class="section-nav" aria-label={`${pageTitle()} sections`}>
+          <For each={activeSectionNavItems()}>
+            {(item) => (
+              <a href={item.href}>
+                {item.label}
+              </a>
+            )}
+          </For>
+        </nav>
+      </Show>
 
       <Show when={error()}>
         <div class="alert" role="alert">
