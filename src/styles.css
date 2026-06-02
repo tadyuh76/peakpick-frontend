@@ -120,7 +120,8 @@ label {
   backdrop-filter: blur(8px);
 }
 
-.section-nav a {
+.section-nav a,
+.section-nav button {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -137,7 +138,10 @@ label {
 }
 
 .section-nav a:hover,
-.section-nav a:focus-visible {
+.section-nav a:focus-visible,
+.section-nav button:hover,
+.section-nav button:focus-visible,
+.section-nav button.active {
   border-color: #ccd5ca;
   background: #f3f8f1;
   color: #17634d;
@@ -240,7 +244,7 @@ h3 {
 
 .admin-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 14px;
   align-items: start;
 }

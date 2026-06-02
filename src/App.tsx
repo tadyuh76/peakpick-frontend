@@ -29,23 +29,19 @@ import type {
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 type RouteId = "customer" | "admin";
+type AdminTabId = "staff" | "detail" | "evidence" | "capacity" | "reservations" | "events";
 const routeLinks = {
   customer: { id: "customer" as const, label: "Customer", path: "/user" },
   admin: { id: "admin" as const, label: "Admin", path: "/admin" }
 };
-const sectionNavItems = {
-  customer: [
-    { label: "Browse", href: "#checkout" },
-    { label: "Pickup status", href: "#pickup-status" }
-  ],
-  admin: [
-    { label: "Staff", href: "#staff-board" },
-    { label: "Evidence", href: "#system-evidence" },
-    { label: "Capacity", href: "#slot-capacity" },
-    { label: "Reservations", href: "#reservations" },
-    { label: "Events", href: "#event-log" }
-  ]
-} satisfies Record<RouteId, Array<{ label: string; href: string }>>;
+const adminTabs = [
+  { id: "staff" as const, label: "Staff" },
+  { id: "detail" as const, label: "Order detail" },
+  { id: "evidence" as const, label: "Evidence" },
+  { id: "capacity" as const, label: "Capacity" },
+  { id: "reservations" as const, label: "Reservations" },
+  { id: "events" as const, label: "Events" }
+] satisfies Array<{ id: AdminTabId; label: string }>;
 
 function App() {
   const [activeView, setActiveView] = createSignal<RouteId>(routeFromPath(window.location.pathname));
@@ -63,6 +59,7 @@ function App() {
   const [analytics, setAnalytics] = createSignal<AnalyticsSnapshot>({ counts: {}, recent_events: [] });
   const [pickupToken, setPickupToken] = createSignal("");
   const [selectedOrderId, setSelectedOrderId] = createSignal("");
+  const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("staff");
   const [busy, setBusy] = createSignal(false);
   const [initialLoading, setInitialLoading] = createSignal(true);
   const [notice, setNotice] = createSignal("Frontend ready");
@@ -138,7 +135,6 @@ function App() {
     activeView() === "customer" ? "Customer pickup order" : "Admin order and slot console"
   );
   const roleSwitchLink = createMemo(() => (activeView() === "customer" ? routeLinks.admin : routeLinks.customer));
-  const activeSectionNavItems = createMemo(() => sectionNavItems[activeView()]);
 
   const canMarkPreparing = createMemo(() => {
     const status = selectedBoardItem()?.status;
@@ -348,12 +344,16 @@ function App() {
       </header>
 
       <Show when={activeView() === "admin"}>
-        <nav class="section-nav" aria-label={`${pageTitle()} sections`}>
-          <For each={activeSectionNavItems()}>
+        <nav class="section-nav" aria-label="Admin sections">
+          <For each={adminTabs}>
             {(item) => (
-              <a href={item.href}>
+              <button
+                class={activeAdminTab() === item.id ? "active" : ""}
+                type="button"
+                onClick={() => setActiveAdminTab(item.id)}
+              >
                 {item.label}
-              </a>
+              </button>
             )}
           </For>
         </nav>
@@ -511,7 +511,8 @@ function App() {
       </section>
 
       <section class={`admin-grid view-section ${activeView() === "admin" ? "active" : ""}`}>
-        <section class="panel staff-panel" id="staff-board">
+        <Show when={activeAdminTab() === "staff"}>
+          <section class="panel staff-panel" id="staff-board">
           <div class="panel-heading split">
             <div>
               <PackageCheck size={19} />
@@ -581,9 +582,11 @@ function App() {
           </button>
 
           <p class="helper-text">Controls unlock only for the selected order's next valid lifecycle step.</p>
-        </section>
+          </section>
+        </Show>
 
-        <section class="panel insight-panel" id="system-evidence">
+        <Show when={activeAdminTab() === "evidence"}>
+          <section class="panel insight-panel" id="system-evidence">
           <div class="panel-heading">
             <BarChart3 size={19} />
             <h2>System evidence</h2>
@@ -609,9 +612,11 @@ function App() {
               </For>
             </Show>
           </div>
-        </section>
+          </section>
+        </Show>
 
-        <section class="panel order-detail-panel" id="order-detail">
+        <Show when={activeAdminTab() === "detail"}>
+          <section class="panel order-detail-panel" id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
             <h2>Order detail</h2>
@@ -653,9 +658,11 @@ function App() {
               </>
             )}
           </Show>
-        </section>
+          </section>
+        </Show>
 
-        <section class="panel slot-dashboard-panel" id="slot-capacity">
+        <Show when={activeAdminTab() === "capacity"}>
+          <section class="panel slot-dashboard-panel" id="slot-capacity">
           <div class="panel-heading">
             <Layers3 size={19} />
             <h2>Slot capacity by pickup window</h2>
@@ -687,9 +694,11 @@ function App() {
               </div>
             )}
           </For>
-        </section>
+          </section>
+        </Show>
 
-        <section class="panel reservation-panel" id="reservations">
+        <Show when={activeAdminTab() === "reservations"}>
+          <section class="panel reservation-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
             <h2>Reservations</h2>
@@ -709,9 +718,11 @@ function App() {
               </For>
             </div>
           </Show>
-        </section>
+          </section>
+        </Show>
 
-        <section class="panel event-log-panel" id="event-log">
+        <Show when={activeAdminTab() === "events"}>
+          <section class="panel event-log-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
             <h2>Recent events</h2>
@@ -730,7 +741,8 @@ function App() {
               </For>
             </div>
           </Show>
-        </section>
+          </section>
+        </Show>
       </section>
     </main>
   );
