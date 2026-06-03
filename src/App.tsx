@@ -28,6 +28,7 @@ import type {
 } from "./services/types";
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
+const LAST_CUSTOMER_ORDER_KEY = "peakpick:last-customer-order-id";
 type RouteId = "customer" | "admin";
 type AdminTabId = "staff" | "detail" | "evidence" | "capacity" | "reservations" | "events";
 const routeLinks = {
@@ -50,6 +51,9 @@ function App() {
   const [customerName, setCustomerName] = createSignal("Tấn");
   const [pickupWindow, setPickupWindow] = createSignal(pickupWindows[1]);
   const [checkout, setCheckout] = createSignal<CheckoutResponse | null>(null);
+  const [customerOrderId, setCustomerOrderId] = createSignal(
+    window.localStorage.getItem(LAST_CUSTOMER_ORDER_KEY) ?? ""
+  );
   const [orders, setOrders] = createSignal<Order[]>([]);
   const [board, setBoard] = createSignal<StaffBoardItem[]>([]);
   const [pickupWindowMeta, setPickupWindowMeta] = createSignal<PickupWindow[]>([]);
@@ -92,13 +96,13 @@ function App() {
   });
 
   const customerOrder = createMemo(() => {
-    const orderId = checkout()?.order.order_id;
+    const orderId = customerOrderId() || checkout()?.order.order_id;
     if (!orderId) return null;
     return orders().find((order) => order.order_id === orderId) ?? checkout()?.order ?? null;
   });
 
   const customerBoardItem = createMemo(() => {
-    const orderId = checkout()?.order.order_id;
+    const orderId = customerOrderId() || checkout()?.order.order_id;
     if (!orderId) return null;
     return board().find((item) => item.order_id === orderId) ?? null;
   });
@@ -264,6 +268,8 @@ function App() {
         items: selectedItems()
       });
       setCheckout(response);
+      setCustomerOrderId(response.order.order_id);
+      window.localStorage.setItem(LAST_CUSTOMER_ORDER_KEY, response.order.order_id);
       setSelectedOrderId(response.order.order_id);
       setPickupToken("");
       await new Promise((resolve) => setTimeout(resolve, 600));
@@ -305,7 +311,7 @@ function App() {
   }
 
   async function copyOrderId() {
-    const orderId = checkout()?.order.order_id;
+    const orderId = customerOrder()?.order_id;
     if (!orderId) return;
     await navigator.clipboard.writeText(orderId);
     setNotice("Đã sao chép mã đơn");
@@ -437,13 +443,13 @@ function App() {
             </p>
           </Show>
 
-          <Show when={checkout()}>
-            {(result) => (
+          <Show when={customerOrder()}>
+            {(order) => (
               <div class="receipt success">
-                <span>Đã tạo đơn thanh toán</span>
+                <span>{checkout() ? "Đã tạo đơn thanh toán" : "Đang theo dõi đơn gần nhất"}</span>
                 <button class="ghost-action" onClick={copyOrderId} title="Sao chép mã đơn">
                   <Copy size={16} />
-                  {shortId(result().order.order_id)}
+                  {shortId(order().order_id)}
                 </button>
               </div>
             )}
