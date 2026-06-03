@@ -37,12 +37,12 @@ const routeLinks = {
   admin: { id: "admin" as const, label: "quản trị", path: "/admin" }
 };
 const adminTabs = [
-  { id: "staff" as const, label: "Nhân viên" },
-  { id: "detail" as const, label: "Chi tiết đơn" },
-  { id: "evidence" as const, label: "Bằng chứng" },
-  { id: "capacity" as const, label: "Sức chứa" },
-  { id: "reservations" as const, label: "Giữ chỗ" },
-  { id: "events" as const, label: "Sự kiện" }
+  { id: "staff" as const, label: "Xử lý đơn" },
+  { id: "detail" as const, label: "Đơn hàng" },
+  { id: "evidence" as const, label: "Hệ thống" },
+  { id: "capacity" as const, label: "Công suất" },
+  { id: "reservations" as const, label: "Lịch giữ ô" },
+  { id: "events" as const, label: "Nhật ký" }
 ] satisfies Array<{ id: AdminTabId; label: string }>;
 
 function App() {
@@ -138,7 +138,7 @@ function App() {
   );
 
   const pageTitle = createMemo(() =>
-    activeView() === "customer" ? "Đặt hàng nhận tại quầy" : "Quản trị đơn hàng và ô nhận"
+    activeView() === "customer" ? "Đặt hàng nhận tại quầy" : "Quản trị đơn nhận hàng"
   );
   const roleSwitchLink = createMemo(() => (activeView() === "customer" ? routeLinks.admin : routeLinks.customer));
 
@@ -254,21 +254,21 @@ function App() {
   async function refreshOperationalData() {
     await Promise.all([
       loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
-      loadResource("Bảng nhân viên", peakpickApi.getStaffBoard, setBoard),
-      loadResource("Lượt giữ chỗ", peakpickApi.getSlotReservations, setReservations),
-      loadResource("Khung giờ nhận", peakpickApi.getPickupWindows, setPickupWindowMeta),
+      loadResource("Bảng xử lý đơn", peakpickApi.getStaffBoard, setBoard),
+      loadResource("Lịch giữ ô nhận", peakpickApi.getSlotReservations, setReservations),
+      loadResource("Khung giờ nhận hàng", peakpickApi.getPickupWindows, setPickupWindowMeta),
       loadResource("Ô nhận", peakpickApi.getSlots, setSlots),
-      loadResource("Thông báo", peakpickApi.getNotifications, setNotifications),
-      loadResource("Phân tích", peakpickApi.getAnalytics, setAnalytics)
+      loadResource("Nhật ký thông báo", peakpickApi.getNotifications, setNotifications),
+      loadResource("Thống kê hệ thống", peakpickApi.getAnalytics, setAnalytics)
     ]);
   }
 
   async function refreshCustomerData() {
     await Promise.all([
       loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
-      loadResource("Bảng nhân viên", peakpickApi.getStaffBoard, setBoard),
-      loadResource("Lượt giữ chỗ", peakpickApi.getSlotReservations, setReservations),
-      loadResource("Khung giờ nhận", peakpickApi.getPickupWindows, setPickupWindowMeta),
+      loadResource("Bảng xử lý đơn", peakpickApi.getStaffBoard, setBoard),
+      loadResource("Lịch giữ ô nhận", peakpickApi.getSlotReservations, setReservations),
+      loadResource("Khung giờ nhận hàng", peakpickApi.getPickupWindows, setPickupWindowMeta),
       loadResource("Ô nhận", peakpickApi.getSlots, setSlots)
     ]);
   }
@@ -558,14 +558,14 @@ function App() {
           <div class="panel-heading split">
             <div>
               <PackageCheck size={19} />
-              <h2>Quy trình nhân viên</h2>
+              <h2>Xử lý đơn tại quầy</h2>
             </div>
             <button class="icon-action" onClick={() => runAction("Đã làm mới dữ liệu vận hành", refreshOperationalData)} title="Làm mới">
               <RefreshCw size={17} />
             </button>
           </div>
 
-          <Show when={board().length > 0} fallback={<p class="empty-state">Chưa có ô nào được gán.</p>}>
+          <Show when={board().length > 0} fallback={<p class="empty-state">Chưa có đơn nào được gán ô nhận.</p>}>
             <div class="board-list">
               <For each={board()}>
                 {(item) => (
@@ -589,7 +589,7 @@ function App() {
           <Show when={selectedBoardItem()}>
             {(item) => (
               <div class="selected-order-card">
-                <Detail label="Đơn đang chọn" value={item().order_id} />
+                <Detail label="Đơn được chọn" value={item().order_id} />
                 <Detail label="Ô nhận" value={item().slot_id} />
                 <Detail label="Khung giờ" value={item().pickup_window} />
                 <Detail label="Trạng thái" value={statusLabel(item().status)} />
@@ -600,11 +600,11 @@ function App() {
           <div class="staff-actions">
             <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
               <RefreshCw size={17} />
-              Chuẩn bị
+              Bắt đầu chuẩn bị
             </button>
             <button disabled={busy() || !canMarkReady()} onClick={markReady}>
               <CheckCircle2 size={17} />
-              Sẵn sàng
+              Báo sẵn sàng
             </button>
           </div>
 
@@ -623,7 +623,7 @@ function App() {
             Xác nhận nhận hàng
           </button>
 
-          <p class="helper-text">Nút thao tác chỉ mở khi đơn đang chọn tới đúng bước tiếp theo.</p>
+          <p class="helper-text">Các nút chỉ mở khi đơn được chọn đang ở đúng bước tiếp theo.</p>
           </section>
         </Show>
 
@@ -631,19 +631,19 @@ function App() {
           <section class="panel insight-panel" id="system-evidence">
           <div class="panel-heading">
             <BarChart3 size={19} />
-            <h2>Bằng chứng hệ thống</h2>
+            <h2>Theo dõi hệ thống</h2>
           </div>
 
           <div class="metric-grid">
             <Metric label="Đơn đã thanh toán" value={analytics().counts.OrderPaid ?? 0} />
-            <Metric label="Ô đã giữ" value={analytics().counts.PickupSlotReserved ?? 0} />
-            <Metric label="Sẵn sàng" value={analytics().counts.OrderReady ?? 0} />
+            <Metric label="Ô nhận đã đặt" value={analytics().counts.PickupSlotReserved ?? 0} />
+            <Metric label="Đơn sẵn sàng" value={analytics().counts.OrderReady ?? 0} />
             <Metric label="Đã nhận" value={analytics().counts.OrderPickedUp ?? 0} />
           </div>
 
           <div class="feed">
-            <h3>Thông báo</h3>
-            <Show when={notifications().length > 0} fallback={<p class="empty-state">Chưa có thông báo.</p>}>
+            <h3>Thông báo gửi khách</h3>
+            <Show when={notifications().length > 0} fallback={<p class="empty-state">Chưa có thông báo gửi khách.</p>}>
               <For each={notifications().slice(-3).reverse()}>
                 {(notification) => (
                   <div class="feed-row">
@@ -664,7 +664,7 @@ function App() {
             <h2>Chi tiết đơn hàng</h2>
           </div>
 
-          <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn đã được gán ô để xem chi tiết.</p>}>
+          <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn đã được gán ô nhận để xem chi tiết.</p>}>
             {(order) => (
               <>
                 <div class="detail-grid">
@@ -707,7 +707,7 @@ function App() {
           <section class="panel slot-dashboard-panel" id="slot-capacity">
           <div class="panel-heading">
             <Layers3 size={19} />
-            <h2>Sức chứa theo khung giờ nhận</h2>
+            <h2>Công suất ô nhận theo khung giờ</h2>
           </div>
 
           <For each={slotDashboardRows()}>
@@ -718,8 +718,8 @@ function App() {
                   <span>Đã dùng {window.used}/{window.capacity}</span>
                 </div>
                 <div class="capacity-strip">
-                  <Metric label="Sức chứa" value={window.capacity} />
-                  <Metric label="Đã dùng" value={window.used} />
+                  <Metric label="Tổng ô" value={window.capacity} />
+                  <Metric label="Đã đặt" value={window.used} />
                   <Metric label="Còn trống" value={window.available} />
                 </div>
                 <div class="slot-grid">
@@ -743,10 +743,10 @@ function App() {
           <section class="panel reservation-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
-            <h2>Danh sách giữ chỗ</h2>
+            <h2>Lịch giữ ô nhận</h2>
           </div>
 
-          <Show when={reservations().length > 0} fallback={<p class="empty-state">Chưa có lượt giữ chỗ.</p>}>
+          <Show when={reservations().length > 0} fallback={<p class="empty-state">Chưa có ô nhận nào được giữ.</p>}>
             <div class="table-list">
               <For each={reservations().slice(0, 8)}>
                 {(reservation) => (
@@ -767,10 +767,10 @@ function App() {
           <section class="panel event-log-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
-            <h2>Sự kiện gần đây</h2>
+            <h2>Nhật ký sự kiện</h2>
           </div>
 
-          <Show when={analytics().recent_events.length > 0} fallback={<p class="empty-state">Chưa có sự kiện.</p>}>
+          <Show when={analytics().recent_events.length > 0} fallback={<p class="empty-state">Chưa có sự kiện mới.</p>}>
             <div class="event-list">
               <For each={analytics().recent_events.slice(-8).reverse()}>
                 {(event) => (
@@ -865,7 +865,7 @@ function statusLabel(value: string) {
     Ready: "Sẵn sàng",
     ReadyForPickup: "Sẵn sàng nhận",
     RefundRequested: "Yêu cầu hoàn tiền",
-    Reserved: "Đã giữ",
+    Reserved: "Đã giữ ô",
     SlotAssigned: "Đã gán ô",
     SlotAssignmentFailed: "Không còn ô"
   };
@@ -876,7 +876,7 @@ function eventTypeLabel(value: string) {
   const labels: Record<string, string> = {
     AnalyticsUpdated: "Đã cập nhật phân tích",
     CartCreated: "Đã tạo giỏ",
-    InventoryReserved: "Đã giữ hàng tồn kho",
+    InventoryReserved: "Đã giữ tồn kho",
     InventoryShortageDetected: "Phát hiện thiếu hàng",
     NotificationRequested: "Đã yêu cầu thông báo",
     OrderExpired: "Đơn hết hạn",
@@ -885,7 +885,7 @@ function eventTypeLabel(value: string) {
     OrderPlacedInSlot: "Đơn đã đặt vào ô",
     OrderPreparing: "Đơn đang chuẩn bị",
     OrderReady: "Đơn sẵn sàng nhận",
-    PickupSlotFull: "Khung giờ hết ô",
+    PickupSlotFull: "Hết ô nhận trong khung giờ",
     PickupSlotReserved: "Đã giữ ô nhận"
   };
   return labels[value] ?? value;
@@ -897,7 +897,7 @@ function sourceLabel(value: string) {
     "inventory-service": "Dịch vụ tồn kho",
     "notification-service": "Dịch vụ thông báo",
     "order-service": "Dịch vụ đơn hàng",
-    "slot-service": "Dịch vụ ô nhận",
+    "slot-service": "Dịch vụ quản lý ô nhận",
     "store-ops-service": "Dịch vụ vận hành cửa hàng"
   };
   return labels[value] ?? value;
