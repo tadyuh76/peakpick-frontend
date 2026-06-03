@@ -398,6 +398,35 @@ h3 {
   font-weight: 650;
 }
 
+.live-sync {
+  display: inline-flex;
+  width: max-content;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d7e6dc;
+  border-radius: 999px;
+  background: #f3fbf6;
+  color: #17634d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.live-sync svg {
+  flex: 0 0 auto;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .primary-action {
   width: 100%;
   border-color: #24745f;

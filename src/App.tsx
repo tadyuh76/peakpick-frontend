@@ -29,6 +29,7 @@ import type {
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 const LAST_CUSTOMER_ORDER_KEY = "peakpick:last-customer-order-id";
+const CUSTOMER_STATUS_SYNC_MS = 3000;
 type RouteId = "customer" | "admin";
 type AdminTabId = "staff" | "detail" | "evidence" | "capacity" | "reservations" | "events";
 const routeLinks = {
@@ -65,6 +66,7 @@ function App() {
   const [selectedOrderId, setSelectedOrderId] = createSignal("");
   const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("staff");
   const [busy, setBusy] = createSignal(false);
+  const [autoRefreshing, setAutoRefreshing] = createSignal(false);
   const [initialLoading, setInitialLoading] = createSignal(true);
   const [notice, setNotice] = createSignal("Giao diện đã sẵn sàng");
   const [error, setError] = createSignal("");
@@ -212,6 +214,25 @@ function App() {
     setPickupWindow(firstAvailable.pickup_window);
   });
 
+  createEffect(() => {
+    if (activeView() !== "customer" || !customerOrderId()) return;
+
+    let refreshInFlight = false;
+    const timer = window.setInterval(async () => {
+      if (refreshInFlight || busy() || document.visibilityState === "hidden") return;
+      refreshInFlight = true;
+      setAutoRefreshing(true);
+      try {
+        await refreshCustomerData();
+      } finally {
+        setAutoRefreshing(false);
+        refreshInFlight = false;
+      }
+    }, CUSTOMER_STATUS_SYNC_MS);
+
+    onCleanup(() => window.clearInterval(timer));
+  });
+
   async function runAction(label: string, action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -239,6 +260,16 @@ function App() {
       loadResource("Ô nhận", peakpickApi.getSlots, setSlots),
       loadResource("Thông báo", peakpickApi.getNotifications, setNotifications),
       loadResource("Phân tích", peakpickApi.getAnalytics, setAnalytics)
+    ]);
+  }
+
+  async function refreshCustomerData() {
+    await Promise.all([
+      loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
+      loadResource("Bảng nhân viên", peakpickApi.getStaffBoard, setBoard),
+      loadResource("Lượt giữ chỗ", peakpickApi.getSlotReservations, setReservations),
+      loadResource("Khung giờ nhận", peakpickApi.getPickupWindows, setPickupWindowMeta),
+      loadResource("Ô nhận", peakpickApi.getSlots, setSlots)
     ]);
   }
 
@@ -465,6 +496,11 @@ function App() {
           <Show when={customerOrder()} fallback={<p class="empty-state">Hãy đặt đơn để theo dõi trạng thái nhận hàng.</p>}>
             {(order) => (
               <>
+                <div class="live-sync" aria-live="polite">
+                  <RefreshCw class={autoRefreshing() ? "spin" : ""} size={15} />
+                  <span>{autoRefreshing() ? "Đang cập nhật trạng thái..." : "Tự cập nhật trạng thái mỗi 3 giây"}</span>
+                </div>
+
                 <div class="pickup-card">
                   <div>
                     <span>Ô nhận hàng</span>
