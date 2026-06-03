@@ -31,23 +31,23 @@ const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 type RouteId = "customer" | "admin";
 type AdminTabId = "staff" | "detail" | "evidence" | "capacity" | "reservations" | "events";
 const routeLinks = {
-  customer: { id: "customer" as const, label: "Customer", path: "/user" },
-  admin: { id: "admin" as const, label: "Admin", path: "/admin" }
+  customer: { id: "customer" as const, label: "khách hàng", path: "/user" },
+  admin: { id: "admin" as const, label: "quản trị", path: "/admin" }
 };
 const adminTabs = [
-  { id: "staff" as const, label: "Staff" },
-  { id: "detail" as const, label: "Order detail" },
-  { id: "evidence" as const, label: "Evidence" },
-  { id: "capacity" as const, label: "Capacity" },
-  { id: "reservations" as const, label: "Reservations" },
-  { id: "events" as const, label: "Events" }
+  { id: "staff" as const, label: "Nhân viên" },
+  { id: "detail" as const, label: "Chi tiết đơn" },
+  { id: "evidence" as const, label: "Bằng chứng" },
+  { id: "capacity" as const, label: "Sức chứa" },
+  { id: "reservations" as const, label: "Giữ chỗ" },
+  { id: "events" as const, label: "Sự kiện" }
 ] satisfies Array<{ id: AdminTabId; label: string }>;
 
 function App() {
   const [activeView, setActiveView] = createSignal<RouteId>(routeFromPath(window.location.pathname));
   const [products, setProducts] = createSignal<Product[]>([]);
   const [quantities, setQuantities] = createSignal<Record<string, number>>({ coffee: 2, snack: 1 });
-  const [customerName, setCustomerName] = createSignal("Tad");
+  const [customerName, setCustomerName] = createSignal("Tấn");
   const [pickupWindow, setPickupWindow] = createSignal(pickupWindows[1]);
   const [checkout, setCheckout] = createSignal<CheckoutResponse | null>(null);
   const [orders, setOrders] = createSignal<Order[]>([]);
@@ -62,7 +62,7 @@ function App() {
   const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("staff");
   const [busy, setBusy] = createSignal(false);
   const [initialLoading, setInitialLoading] = createSignal(true);
-  const [notice, setNotice] = createSignal("Frontend ready");
+  const [notice, setNotice] = createSignal("Giao diện đã sẵn sàng");
   const [error, setError] = createSignal("");
   const [dataErrors, setDataErrors] = createSignal<Record<string, string>>({});
 
@@ -132,7 +132,7 @@ function App() {
   );
 
   const pageTitle = createMemo(() =>
-    activeView() === "customer" ? "Customer pickup order" : "Admin order and slot console"
+    activeView() === "customer" ? "Đặt hàng nhận tại quầy" : "Quản trị đơn hàng và ô nhận"
   );
   const roleSwitchLink = createMemo(() => (activeView() === "customer" ? routeLinks.admin : routeLinks.customer));
 
@@ -215,26 +215,26 @@ function App() {
       await action();
       setNotice(label);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed");
+      setError(err instanceof Error ? translateError(err.message) : "Yêu cầu thất bại");
     } finally {
       setBusy(false);
     }
   }
 
   async function loadProducts() {
-    const loaded = await loadResource("Catalog", peakpickApi.listProducts, setProducts);
-    if (loaded) setNotice("Catalog loaded");
+    const loaded = await loadResource("Danh mục", peakpickApi.listProducts, setProducts);
+    if (loaded) setNotice("Đã tải danh mục");
   }
 
   async function refreshOperationalData() {
     await Promise.all([
-      loadResource("Orders", peakpickApi.listOrders, setOrders),
-      loadResource("Staff board", peakpickApi.getStaffBoard, setBoard),
-      loadResource("Reservations", peakpickApi.getSlotReservations, setReservations),
-      loadResource("Pickup windows", peakpickApi.getPickupWindows, setPickupWindowMeta),
-      loadResource("Slots", peakpickApi.getSlots, setSlots),
-      loadResource("Notifications", peakpickApi.getNotifications, setNotifications),
-      loadResource("Analytics", peakpickApi.getAnalytics, setAnalytics)
+      loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
+      loadResource("Bảng nhân viên", peakpickApi.getStaffBoard, setBoard),
+      loadResource("Lượt giữ chỗ", peakpickApi.getSlotReservations, setReservations),
+      loadResource("Khung giờ nhận", peakpickApi.getPickupWindows, setPickupWindowMeta),
+      loadResource("Ô nhận", peakpickApi.getSlots, setSlots),
+      loadResource("Thông báo", peakpickApi.getNotifications, setNotifications),
+      loadResource("Phân tích", peakpickApi.getAnalytics, setAnalytics)
     ]);
   }
 
@@ -250,14 +250,14 @@ function App() {
     } catch (err) {
       setDataErrors((current) => ({
         ...current,
-        [key]: err instanceof Error ? err.message : "Request failed"
+        [key]: err instanceof Error ? translateError(err.message) : "Yêu cầu thất bại"
       }));
       return false;
     }
   }
 
   async function submitCheckout() {
-    await runAction("Order paid event published", async () => {
+    await runAction("Đã phát sự kiện đơn đã thanh toán", async () => {
       const response = await peakpickApi.checkout({
         customer_name: customerName(),
         pickup_window: pickupWindow(),
@@ -274,7 +274,7 @@ function App() {
   async function markPreparing() {
     const item = selectedBoardItem();
     if (!item) return;
-    await runAction("OrderPreparing published", async () => {
+    await runAction("Đã chuyển đơn sang đang chuẩn bị", async () => {
       await peakpickApi.markPreparing(item.order_id);
       await refreshOperationalData();
     });
@@ -283,7 +283,7 @@ function App() {
   async function markReady() {
     const item = selectedBoardItem();
     if (!item) return;
-    await runAction("OrderReady published", async () => {
+    await runAction("Đã chuyển đơn sang sẵn sàng nhận", async () => {
       const updated = await peakpickApi.markReady(item.order_id);
       setPickupToken(updated.token ?? "");
       await refreshOperationalData();
@@ -294,7 +294,7 @@ function App() {
     const item = selectedBoardItem();
     const token = pickupToken().trim() || item?.token;
     if (!item || !token) return;
-    await runAction("OrderPickedUp published", async () => {
+    await runAction("Đã xác nhận khách đã nhận hàng", async () => {
       await peakpickApi.verifyPickup(item.order_id, token);
       await refreshOperationalData();
     });
@@ -308,7 +308,7 @@ function App() {
     const orderId = checkout()?.order.order_id;
     if (!orderId) return;
     await navigator.clipboard.writeText(orderId);
-    setNotice("Order ID copied");
+    setNotice("Đã sao chép mã đơn");
   }
 
   function navigateToRoute(route: RouteId, path: string) {
@@ -338,13 +338,13 @@ function App() {
               navigateToRoute(roleSwitchLink().id, roleSwitchLink().path);
             }}
           >
-            Open {roleSwitchLink().label}
+            Mở trang {roleSwitchLink().label}
           </a>
         </div>
       </header>
 
       <Show when={activeView() === "admin"}>
-        <nav class="section-nav" aria-label="Admin sections">
+        <nav class="section-nav" aria-label="Các mục quản trị">
           <For each={adminTabs}>
             {(item) => (
               <button
@@ -367,7 +367,7 @@ function App() {
 
       <Show when={Object.keys(dataErrors()).length > 0}>
         <div class="module-alert" role="status">
-          <strong>Some services are unavailable.</strong>
+          <strong>Một số dịch vụ đang không khả dụng.</strong>
           <span>{Object.keys(dataErrors()).join(", ")}</span>
         </div>
       </Show>
@@ -376,21 +376,21 @@ function App() {
         <section class="panel order-panel" id="checkout">
           <div class="panel-heading">
             <ShoppingCart size={19} />
-            <h2>Browse and checkout</h2>
+            <h2>Chọn hàng và thanh toán</h2>
           </div>
 
           <label>
-            Customer
+            Khách hàng
             <input value={customerName()} onInput={(event) => setCustomerName(event.currentTarget.value)} />
           </label>
 
           <label>
-            Pickup window
+            Khung giờ nhận
             <select value={pickupWindow()} onChange={(event) => setPickupWindow(event.currentTarget.value)}>
               <For each={pickupWindowOptions()}>
                 {(window) => (
                   <option value={window.pickup_window} disabled={window.available <= 0}>
-                    {window.pickup_window} - {window.available} slots left
+                    {window.pickup_window} - còn {window.available} ô
                   </option>
                 )}
               </For>
@@ -400,13 +400,13 @@ function App() {
           <div class="product-list">
             <Show
               when={!initialLoading() && products().length > 0}
-              fallback={<p class="empty-state">{initialLoading() ? "Loading products..." : "No products available."}</p>}
+              fallback={<p class="empty-state">{initialLoading() ? "Đang tải sản phẩm..." : "Chưa có sản phẩm khả dụng."}</p>}
             >
               <For each={products()}>
                 {(product) => (
                   <div class="product-row">
                     <div>
-                      <strong>{product.name}</strong>
+                      <strong>{productName(product)}</strong>
                       <span>{formatCurrency(product.price)}</span>
                     </div>
                     <input
@@ -414,7 +414,7 @@ function App() {
                       min="0"
                       value={quantities()[product.sku] ?? 0}
                       onInput={(event) => updateQuantity(product.sku, Number(event.currentTarget.value))}
-                      aria-label={`${product.name} quantity`}
+                      aria-label={`Số lượng ${productName(product)}`}
                     />
                   </div>
                 )}
@@ -423,25 +423,25 @@ function App() {
           </div>
 
           <div class="summary-line">
-            <span>Total</span>
+            <span>Tổng cộng</span>
             <strong>{formatCurrency(total())}</strong>
           </div>
 
           <button class="primary-action" disabled={busy() || !hasCheckoutInput()} onClick={submitCheckout}>
             <CreditCard size={18} />
-            Create paid order
+            Tạo đơn đã thanh toán
           </button>
           <Show when={!hasCheckoutInput()}>
             <p class="helper-text">
-              Enter a customer name, choose at least one item, and pick a window with available slots.
+              Nhập tên khách, chọn ít nhất một món, và chọn khung giờ còn ô trống.
             </p>
           </Show>
 
           <Show when={checkout()}>
             {(result) => (
               <div class="receipt success">
-                <span>Paid order created</span>
-                <button class="ghost-action" onClick={copyOrderId} title="Copy order ID">
+                <span>Đã tạo đơn thanh toán</span>
+                <button class="ghost-action" onClick={copyOrderId} title="Sao chép mã đơn">
                   <Copy size={16} />
                   {shortId(result().order.order_id)}
                 </button>
@@ -453,31 +453,31 @@ function App() {
         <section class="panel customer-status-panel" id="pickup-status">
           <div class="panel-heading">
             <ClipboardList size={19} />
-            <h2>Pickup status</h2>
+            <h2>Trạng thái nhận hàng</h2>
           </div>
 
-          <Show when={customerOrder()} fallback={<p class="empty-state">Place an order to track your pickup.</p>}>
+          <Show when={customerOrder()} fallback={<p class="empty-state">Hãy đặt đơn để theo dõi trạng thái nhận hàng.</p>}>
             {(order) => (
               <>
                 <div class="pickup-card">
                   <div>
-                    <span>Pickup slot</span>
+                    <span>Ô nhận hàng</span>
                     <strong>{pickupSlotLabel(order().order_status, customerBoardItem())}</strong>
                   </div>
                   <StatusBadge value={customerBoardItem()?.status ?? order().order_status} />
                 </div>
 
                 <div class="detail-grid">
-                  <Detail label="Order ID" value={order().order_id} />
-                  <Detail label="Window" value={order().pickup_window} />
-                  <Detail label="Assigned slot" value={pickupSlotLabel(order().order_status, customerBoardItem())} />
-                  <Detail label="Current status" value={customerBoardItem()?.status ?? order().order_status} />
-                  <Detail label="Payment" value={order().payment_status} />
-                  <Detail label="Pickup token" value={customerBoardItem()?.token ?? "Not ready"} />
+                  <Detail label="Mã đơn" value={order().order_id} />
+                  <Detail label="Khung giờ" value={order().pickup_window} />
+                  <Detail label="Ô được gán" value={pickupSlotLabel(order().order_status, customerBoardItem())} />
+                  <Detail label="Trạng thái hiện tại" value={statusLabel(customerBoardItem()?.status ?? order().order_status)} />
+                  <Detail label="Thanh toán" value={statusLabel(order().payment_status)} />
+                  <Detail label="Mã nhận hàng" value={customerBoardItem()?.token ?? "Chưa sẵn sàng"} />
                 </div>
 
                 <Show when={order().order_status === "SlotAssignmentFailed"}>
-                  <p class="empty-state">No pickup slot is available for that window. Please create a new order with another pickup window.</p>
+                  <p class="empty-state">Khung giờ này đã hết ô nhận hàng. Hãy tạo đơn mới với khung giờ khác.</p>
                 </Show>
 
                 <div class="timeline">
@@ -487,7 +487,7 @@ function App() {
                         class={`timeline-step ${isStepReached(customerBoardItem()?.status ?? order().order_status, step) ? "active" : ""}`}
                       >
                         <span />
-                        <p>{step}</p>
+                        <p>{statusLabel(step)}</p>
                       </div>
                     )}
                   </For>
@@ -497,7 +497,7 @@ function App() {
                   {(token) => (
                 <div class="token-card">
                       <div>
-                        <span>QR pickup code</span>
+                        <span>Mã QR nhận hàng</span>
                         <strong>{token()}</strong>
                       </div>
                       <PickupCode token={token()} />
@@ -516,14 +516,14 @@ function App() {
           <div class="panel-heading split">
             <div>
               <PackageCheck size={19} />
-              <h2>Staff workflow</h2>
+              <h2>Quy trình nhân viên</h2>
             </div>
-            <button class="icon-action" onClick={() => runAction("Board refreshed", refreshOperationalData)} title="Refresh">
+            <button class="icon-action" onClick={() => runAction("Đã làm mới dữ liệu vận hành", refreshOperationalData)} title="Làm mới">
               <RefreshCw size={17} />
             </button>
           </div>
 
-          <Show when={board().length > 0} fallback={<p class="empty-state">No assigned slots yet.</p>}>
+          <Show when={board().length > 0} fallback={<p class="empty-state">Chưa có ô nào được gán.</p>}>
             <div class="board-list">
               <For each={board()}>
                 {(item) => (
@@ -547,10 +547,10 @@ function App() {
           <Show when={selectedBoardItem()}>
             {(item) => (
               <div class="selected-order-card">
-                <Detail label="Selected order" value={item().order_id} />
-                <Detail label="Slot" value={item().slot_id} />
-                <Detail label="Window" value={item().pickup_window} />
-                <Detail label="Status" value={item().status} />
+                <Detail label="Đơn đang chọn" value={item().order_id} />
+                <Detail label="Ô nhận" value={item().slot_id} />
+                <Detail label="Khung giờ" value={item().pickup_window} />
+                <Detail label="Trạng thái" value={statusLabel(item().status)} />
               </div>
             )}
           </Show>
@@ -558,16 +558,16 @@ function App() {
           <div class="staff-actions">
             <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
               <RefreshCw size={17} />
-              Preparing
+              Chuẩn bị
             </button>
             <button disabled={busy() || !canMarkReady()} onClick={markReady}>
               <CheckCircle2 size={17} />
-              Ready
+              Sẵn sàng
             </button>
           </div>
 
           <label>
-            Pickup token
+            Mã nhận hàng
             <input
               value={pickupToken()}
               onInput={(event) => setPickupToken(event.currentTarget.value)}
@@ -578,10 +578,10 @@ function App() {
 
           <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
             <TicketCheck size={18} />
-            Verify pickup
+            Xác nhận nhận hàng
           </button>
 
-          <p class="helper-text">Controls unlock only for the selected order's next valid lifecycle step.</p>
+          <p class="helper-text">Nút thao tác chỉ mở khi đơn đang chọn tới đúng bước tiếp theo.</p>
           </section>
         </Show>
 
@@ -589,24 +589,24 @@ function App() {
           <section class="panel insight-panel" id="system-evidence">
           <div class="panel-heading">
             <BarChart3 size={19} />
-            <h2>System evidence</h2>
+            <h2>Bằng chứng hệ thống</h2>
           </div>
 
           <div class="metric-grid">
-            <Metric label="OrderPaid" value={analytics().counts.OrderPaid ?? 0} />
-            <Metric label="SlotReserved" value={analytics().counts.PickupSlotReserved ?? 0} />
-            <Metric label="Ready" value={analytics().counts.OrderReady ?? 0} />
-            <Metric label="PickedUp" value={analytics().counts.OrderPickedUp ?? 0} />
+            <Metric label="Đơn đã thanh toán" value={analytics().counts.OrderPaid ?? 0} />
+            <Metric label="Ô đã giữ" value={analytics().counts.PickupSlotReserved ?? 0} />
+            <Metric label="Sẵn sàng" value={analytics().counts.OrderReady ?? 0} />
+            <Metric label="Đã nhận" value={analytics().counts.OrderPickedUp ?? 0} />
           </div>
 
           <div class="feed">
-            <h3>Notifications</h3>
-            <Show when={notifications().length > 0} fallback={<p class="empty-state">No notifications yet.</p>}>
+            <h3>Thông báo</h3>
+            <Show when={notifications().length > 0} fallback={<p class="empty-state">Chưa có thông báo.</p>}>
               <For each={notifications().slice(-3).reverse()}>
                 {(notification) => (
                   <div class="feed-row">
                     <Bell size={16} />
-                    <span>{notification.message}</span>
+                    <span>{notificationMessage(notification.message)}</span>
                   </div>
                 )}
               </For>
@@ -619,17 +619,17 @@ function App() {
           <section class="panel order-detail-panel" id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
-            <h2>Order detail</h2>
+            <h2>Chi tiết đơn hàng</h2>
           </div>
 
-          <Show when={selectedOrder()} fallback={<p class="empty-state">Select an assigned order to inspect order detail.</p>}>
+          <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn đã được gán ô để xem chi tiết.</p>}>
             {(order) => (
               <>
                 <div class="detail-grid">
-                  <Detail label="Order ID" value={order().order_id} />
-                  <Detail label="Payment" value={order().payment_status} />
-                  <Detail label="Order status" value={order().order_status} />
-                  <Detail label="Window" value={order().pickup_window} />
+                  <Detail label="Mã đơn" value={order().order_id} />
+                  <Detail label="Thanh toán" value={statusLabel(order().payment_status)} />
+                  <Detail label="Trạng thái đơn" value={statusLabel(order().order_status)} />
+                  <Detail label="Khung giờ" value={order().pickup_window} />
                 </div>
 
                 <div class="timeline">
@@ -639,7 +639,7 @@ function App() {
                         class={`timeline-step ${isStepReached(selectedBoardItem()?.status ?? order().order_status, step) ? "active" : ""}`}
                       >
                         <span />
-                        <p>{step}</p>
+                        <p>{statusLabel(step)}</p>
                       </div>
                     )}
                   </For>
@@ -665,7 +665,7 @@ function App() {
           <section class="panel slot-dashboard-panel" id="slot-capacity">
           <div class="panel-heading">
             <Layers3 size={19} />
-            <h2>Slot capacity by pickup window</h2>
+            <h2>Sức chứa theo khung giờ nhận</h2>
           </div>
 
           <For each={slotDashboardRows()}>
@@ -673,19 +673,19 @@ function App() {
               <div class="window-capacity">
                 <div class="window-title">
                   <h3>{window.pickup_window}</h3>
-                  <span>{window.used}/{window.capacity} used</span>
+                  <span>Đã dùng {window.used}/{window.capacity}</span>
                 </div>
                 <div class="capacity-strip">
-                  <Metric label="Capacity" value={window.capacity} />
-                  <Metric label="Used" value={window.used} />
-                  <Metric label="Available" value={window.available} />
+                  <Metric label="Sức chứa" value={window.capacity} />
+                  <Metric label="Đã dùng" value={window.used} />
+                  <Metric label="Còn trống" value={window.available} />
                 </div>
                 <div class="slot-grid">
                   <For each={window.slotRows}>
                     {(slot) => (
                       <div class={`slot-tile ${slot.status.toLowerCase()}`}>
                         <strong>{slot.slot_id}</strong>
-                        <span>{slot.status}</span>
+                  <span>{statusLabel(slot.status)}</span>
                         <Show when={slot.order_id}>{(orderId) => <small>{shortId(orderId())}</small>}</Show>
                       </div>
                     )}
@@ -701,10 +701,10 @@ function App() {
           <section class="panel reservation-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
-            <h2>Reservations</h2>
+            <h2>Danh sách giữ chỗ</h2>
           </div>
 
-          <Show when={reservations().length > 0} fallback={<p class="empty-state">No reservations yet.</p>}>
+          <Show when={reservations().length > 0} fallback={<p class="empty-state">Chưa có lượt giữ chỗ.</p>}>
             <div class="table-list">
               <For each={reservations().slice(0, 8)}>
                 {(reservation) => (
@@ -725,17 +725,17 @@ function App() {
           <section class="panel event-log-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
-            <h2>Recent events</h2>
+            <h2>Sự kiện gần đây</h2>
           </div>
 
-          <Show when={analytics().recent_events.length > 0} fallback={<p class="empty-state">No events yet.</p>}>
+          <Show when={analytics().recent_events.length > 0} fallback={<p class="empty-state">Chưa có sự kiện.</p>}>
             <div class="event-list">
               <For each={analytics().recent_events.slice(-8).reverse()}>
                 {(event) => (
                   <div class="event-row">
-                    <strong>{event.event_type}</strong>
+                    <strong>{eventTypeLabel(event.event_type)}</strong>
                     <span>{shortId(event.aggregate_id)}</span>
-                    <small>{event.source}</small>
+                    <small>{sourceLabel(event.source)}</small>
                   </div>
                 )}
               </For>
@@ -778,24 +778,102 @@ function Detail(props: { label: string; value: string }) {
 }
 
 function StatusBadge(props: { value: string }) {
-  return <span class={`status-badge ${props.value.toLowerCase()}`}>{props.value}</span>;
+  return <span class={`status-badge ${props.value.toLowerCase()}`}>{statusLabel(props.value)}</span>;
 }
 
 function pickupSlotLabel(orderStatus: string, boardItem: StaffBoardItem | null) {
   if (boardItem?.slot_id) return boardItem.slot_id;
-  if (orderStatus === "SlotAssignmentFailed") return "No slot";
-  return "Assigning";
+  if (orderStatus === "SlotAssignmentFailed") return "Không còn ô";
+  return "Đang gán";
 }
 
 function PickupCode(props: { token: string }) {
   const cells = createMemo(() => pickupCodeCells(props.token));
   return (
-    <div class="pickup-code" aria-label={`Pickup QR-style code for ${props.token}`}>
+    <div class="pickup-code" aria-label={`Mã QR nhận hàng cho ${props.token}`}>
       <For each={cells()}>
         {(filled) => <span class={filled ? "filled" : ""} />}
       </For>
     </div>
   );
+}
+
+function productName(product: Product) {
+  const names: Record<string, string> = {
+    coffee: "Cà phê đá",
+    water: "Nước suối",
+    tea: "Trà đào",
+    sandwich: "Bánh mì gà",
+    snack: "Snack rong biển"
+  };
+  return names[product.sku] ?? product.name;
+}
+
+function statusLabel(value: string) {
+  const labels: Record<string, string> = {
+    Available: "Còn trống",
+    CartCreated: "Đã tạo giỏ",
+    Completed: "Hoàn tất",
+    Expired: "Hết hạn",
+    InventoryShortage: "Thiếu hàng",
+    Paid: "Đã thanh toán",
+    PaymentPending: "Chờ thanh toán",
+    PlacedInSlot: "Đã đặt vào ô",
+    Preparing: "Đang chuẩn bị",
+    Ready: "Sẵn sàng",
+    ReadyForPickup: "Sẵn sàng nhận",
+    RefundRequested: "Yêu cầu hoàn tiền",
+    Reserved: "Đã giữ",
+    SlotAssigned: "Đã gán ô",
+    SlotAssignmentFailed: "Không còn ô"
+  };
+  return labels[value] ?? value;
+}
+
+function eventTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    AnalyticsUpdated: "Đã cập nhật phân tích",
+    CartCreated: "Đã tạo giỏ",
+    InventoryReserved: "Đã giữ hàng tồn kho",
+    InventoryShortageDetected: "Phát hiện thiếu hàng",
+    NotificationRequested: "Đã yêu cầu thông báo",
+    OrderExpired: "Đơn hết hạn",
+    OrderPaid: "Đơn đã thanh toán",
+    OrderPickedUp: "Khách đã nhận hàng",
+    OrderPlacedInSlot: "Đơn đã đặt vào ô",
+    OrderPreparing: "Đơn đang chuẩn bị",
+    OrderReady: "Đơn sẵn sàng nhận",
+    PickupSlotFull: "Khung giờ hết ô",
+    PickupSlotReserved: "Đã giữ ô nhận"
+  };
+  return labels[value] ?? value;
+}
+
+function sourceLabel(value: string) {
+  const labels: Record<string, string> = {
+    "analytics-service": "Dịch vụ phân tích",
+    "inventory-service": "Dịch vụ tồn kho",
+    "notification-service": "Dịch vụ thông báo",
+    "order-service": "Dịch vụ đơn hàng",
+    "slot-service": "Dịch vụ ô nhận",
+    "store-ops-service": "Dịch vụ vận hành cửa hàng"
+  };
+  return labels[value] ?? value;
+}
+
+function notificationMessage(message: string) {
+  const readyMatch = message.match(/^Order (.+) is ready at slot (.+)\. Token: (.+)$/);
+  if (readyMatch) {
+    return `Đơn ${readyMatch[1]} đã sẵn sàng tại ô ${readyMatch[2]}. Mã nhận hàng: ${readyMatch[3]}`;
+  }
+  return message;
+}
+
+function translateError(message: string) {
+  if (message.includes("Invalid pickup token")) return "Mã nhận hàng không hợp lệ";
+  if (message.includes("Order is not on the staff board")) return "Đơn chưa xuất hiện trên bảng nhân viên";
+  if (message.includes("Request failed")) return "Yêu cầu thất bại";
+  return message;
 }
 
 function isStepReached(status: string, step: string) {
