@@ -284,6 +284,7 @@ h3 {
 }
 
 .product-list,
+.order-list,
 .board-list,
 .feed {
   display: grid;
@@ -291,6 +292,7 @@ h3 {
 }
 
 .product-row,
+.order-list-item,
 .slot-row,
 .feed-row,
 .board-item,
@@ -372,10 +374,44 @@ h3 {
 }
 
 .product-row span,
+.order-list-item span,
 .board-item p,
 .feed-row span {
   color: #667067;
   font-size: 0.86rem;
+}
+
+.subsection-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.subsection-heading span {
+  color: #667067;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.order-list-item {
+  width: 100%;
+  text-align: left;
+}
+
+.order-list-item > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.order-list-item strong {
+  overflow-wrap: anywhere;
+}
+
+.order-list-item.selected {
+  border-color: #24745f;
+  background: #f3f8f1;
 }
 
 .product-row input {
@@ -751,6 +787,7 @@ h3 {
   }
 
   .product-row,
+  .order-list-item,
   .board-item,
   .receipt,
   .reservation-row,

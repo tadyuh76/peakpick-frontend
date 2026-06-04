@@ -29,6 +29,7 @@ import type {
 
 const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 const LAST_CUSTOMER_ORDER_KEY = "peakpick:last-customer-order-id";
+const CUSTOMER_ORDER_IDS_KEY = "peakpick:customer-order-ids";
 const CUSTOMER_STATUS_SYNC_MS = 3000;
 type RouteId = "customer" | "admin";
 type AdminTabId = "staff" | "detail" | "evidence" | "capacity" | "reservations" | "events";
@@ -55,6 +56,7 @@ function App() {
   const [customerOrderId, setCustomerOrderId] = createSignal(
     window.localStorage.getItem(LAST_CUSTOMER_ORDER_KEY) ?? ""
   );
+  const [customerOrderIds, setCustomerOrderIds] = createSignal(readCustomerOrderIds());
   const [orders, setOrders] = createSignal<Order[]>([]);
   const [board, setBoard] = createSignal<StaffBoardItem[]>([]);
   const [pickupWindowMeta, setPickupWindowMeta] = createSignal<PickupWindow[]>([]);
@@ -101,6 +103,14 @@ function App() {
     const orderId = customerOrderId() || checkout()?.order.order_id;
     if (!orderId) return null;
     return orders().find((order) => order.order_id === orderId) ?? checkout()?.order ?? null;
+  });
+
+  const customerOrders = createMemo(() => {
+    const trackedIds = customerOrderIds();
+    const currentCheckout = checkout()?.order;
+    return trackedIds
+      .map((orderId) => orders().find((order) => order.order_id === orderId) ?? (currentCheckout?.order_id === orderId ? currentCheckout : null))
+      .filter((order): order is Order => Boolean(order));
   });
 
   const customerBoardItem = createMemo(() => {
@@ -198,8 +208,17 @@ function App() {
 
   createEffect(() => {
     const currentSelection = selectedOrderId();
-    if (currentSelection && board().some((item) => item.order_id === currentSelection)) return;
-    setSelectedOrderId(board()[0]?.order_id ?? "");
+    if (currentSelection && orders().some((order) => order.order_id === currentSelection)) return;
+    setSelectedOrderId(board()[0]?.order_id ?? orders()[0]?.order_id ?? "");
+  });
+
+  createEffect(() => {
+    const trackedOrders = customerOrders();
+    const currentOrderId = customerOrderId();
+    if (currentOrderId && trackedOrders.some((order) => order.order_id === currentOrderId)) return;
+    const nextOrderId = trackedOrders[0]?.order_id ?? "";
+    setCustomerOrderId(nextOrderId);
+    if (nextOrderId) window.localStorage.setItem(LAST_CUSTOMER_ORDER_KEY, nextOrderId);
   });
 
   createEffect(() => {
@@ -215,7 +234,7 @@ function App() {
   });
 
   createEffect(() => {
-    if (activeView() !== "customer" || !customerOrderId()) return;
+    if (activeView() !== "customer" || customerOrderIds().length === 0) return;
 
     let refreshInFlight = false;
     const timer = window.setInterval(async () => {
@@ -299,8 +318,8 @@ function App() {
         items: selectedItems()
       });
       setCheckout(response);
-      setCustomerOrderId(response.order.order_id);
-      window.localStorage.setItem(LAST_CUSTOMER_ORDER_KEY, response.order.order_id);
+      selectCustomerOrder(response.order.order_id);
+      addCustomerOrderId(response.order.order_id);
       setSelectedOrderId(response.order.order_id);
       setPickupToken("");
       await new Promise((resolve) => setTimeout(resolve, 600));
@@ -339,6 +358,19 @@ function App() {
 
   function updateQuantity(sku: string, value: number) {
     setQuantities((current) => ({ ...current, [sku]: Math.max(0, value) }));
+  }
+
+  function selectCustomerOrder(orderId: string) {
+    setCustomerOrderId(orderId);
+    window.localStorage.setItem(LAST_CUSTOMER_ORDER_KEY, orderId);
+  }
+
+  function addCustomerOrderId(orderId: string) {
+    setCustomerOrderIds((current) => {
+      const next = [orderId, ...current.filter((id) => id !== orderId)].slice(0, 8);
+      window.localStorage.setItem(CUSTOMER_ORDER_IDS_KEY, JSON.stringify(next));
+      return next;
+    });
   }
 
   async function copyOrderId() {
@@ -477,7 +509,7 @@ function App() {
           <Show when={customerOrder()}>
             {(order) => (
               <div class="receipt success">
-                <span>{checkout() ? "Đã tạo đơn thanh toán" : "Đang theo dõi đơn gần nhất"}</span>
+                <span>{checkout() ? "Đã tạo đơn thanh toán" : "Đang theo dõi đơn được chọn"}</span>
                 <button class="ghost-action" onClick={copyOrderId} title="Sao chép mã đơn">
                   <Copy size={16} />
                   {shortId(order().order_id)}
@@ -493,7 +525,34 @@ function App() {
             <h2>Trạng thái nhận hàng</h2>
           </div>
 
-          <Show when={customerOrder()} fallback={<p class="empty-state">Hãy đặt đơn để theo dõi trạng thái nhận hàng.</p>}>
+          <Show when={customerOrders().length > 0} fallback={<p class="empty-state">Hãy đặt đơn để theo dõi trạng thái nhận hàng.</p>}>
+            <div class="order-list">
+              <div class="subsection-heading">
+                <h3>Đơn đang theo dõi</h3>
+                <span>{customerOrders().length} đơn</span>
+              </div>
+              <For each={customerOrders()}>
+                {(order) => {
+                  const boardItem = board().find((item) => item.order_id === order.order_id);
+                  return (
+                    <button
+                      class={`order-list-item ${customerOrderId() === order.order_id ? "selected" : ""}`}
+                      type="button"
+                      onClick={() => selectCustomerOrder(order.order_id)}
+                    >
+                      <div>
+                        <strong>{shortId(order.order_id)}</strong>
+                        <span>{order.pickup_window}</span>
+                      </div>
+                      <StatusBadge value={boardItem?.status ?? order.order_status} />
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={customerOrder()}>
             {(order) => (
               <>
                 <div class="live-sync" aria-live="polite">
@@ -661,10 +720,37 @@ function App() {
           <section class="panel order-detail-panel" id="order-detail">
           <div class="panel-heading">
             <ClipboardList size={19} />
-            <h2>Chi tiết đơn hàng</h2>
+            <h2>Đơn hàng</h2>
           </div>
 
-          <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn đã được gán ô nhận để xem chi tiết.</p>}>
+          <Show when={orders().length > 0} fallback={<p class="empty-state">Chưa có đơn hàng nào.</p>}>
+            <div class="order-list">
+              <div class="subsection-heading">
+                <h3>Danh sách đơn</h3>
+                <span>{orders().length} đơn</span>
+              </div>
+              <For each={orders()}>
+                {(order) => {
+                  const boardItem = board().find((item) => item.order_id === order.order_id);
+                  return (
+                    <button
+                      class={`order-list-item ${selectedOrderId() === order.order_id ? "selected" : ""}`}
+                      type="button"
+                      onClick={() => setSelectedOrderId(order.order_id)}
+                    >
+                      <div>
+                        <strong>{shortId(order.order_id)}</strong>
+                        <span>{order.customer_name} · {order.pickup_window}</span>
+                      </div>
+                      <StatusBadge value={boardItem?.status ?? order.order_status} />
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
+
+          <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn trong danh sách để xem chi tiết.</p>}>
             {(order) => (
               <>
                 <div class="detail-grid">
@@ -691,7 +777,7 @@ function App() {
                   <For each={order().items}>
                     {(item) => (
                       <div class="compact-row">
-                        <span>{item.sku}</span>
+                        <span>{productNameBySku(item.sku)}</span>
                         <strong>x{item.quantity}</strong>
                       </div>
                     )}
@@ -841,6 +927,10 @@ function PickupCode(props: { token: string }) {
 }
 
 function productName(product: Product) {
+  return productNameBySku(product.sku) ?? product.name;
+}
+
+function productNameBySku(sku: string) {
   const names: Record<string, string> = {
     coffee: "Cà phê đá",
     water: "Nước suối",
@@ -848,7 +938,19 @@ function productName(product: Product) {
     sandwich: "Bánh mì gà",
     snack: "Snack rong biển"
   };
-  return names[product.sku] ?? product.name;
+  return names[sku] ?? sku;
+}
+
+function readCustomerOrderIds() {
+  const lastOrderId = window.localStorage.getItem(LAST_CUSTOMER_ORDER_KEY);
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CUSTOMER_ORDER_IDS_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return lastOrderId ? [lastOrderId] : [];
+    const ids = parsed.filter((value): value is string => typeof value === "string");
+    return lastOrderId && !ids.includes(lastOrderId) ? [lastOrderId, ...ids] : ids;
+  } catch {
+    return lastOrderId ? [lastOrderId] : [];
+  }
 }
 
 function statusLabel(value: string) {
