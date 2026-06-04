@@ -131,6 +131,12 @@ function App() {
     return orders().find((order) => order.order_id === orderId) ?? null;
   });
 
+  const selectedOrderBoardItem = createMemo(() => {
+    const orderId = selectedOrderId();
+    if (!orderId) return null;
+    return board().find((item) => item.order_id === orderId) ?? null;
+  });
+
   const selectedItems = createMemo(() =>
     products()
       .map((product) => ({ sku: product.sku, quantity: quantities()[product.sku] ?? 0 }))
@@ -723,69 +729,80 @@ function App() {
             <h2>Đơn hàng</h2>
           </div>
 
-          <Show when={orders().length > 0} fallback={<p class="empty-state">Chưa có đơn hàng nào.</p>}>
-            <div class="order-list">
-              <div class="subsection-heading">
-                <h3>Danh sách đơn</h3>
-                <span>{orders().length} đơn</span>
-              </div>
-              <For each={orders()}>
-                {(order) => {
-                  const boardItem = board().find((item) => item.order_id === order.order_id);
-                  return (
-                    <button
-                      class={`order-list-item ${selectedOrderId() === order.order_id ? "selected" : ""}`}
-                      type="button"
-                      onClick={() => setSelectedOrderId(order.order_id)}
-                    >
-                      <div>
-                        <strong>{shortId(order.order_id)}</strong>
-                        <span>{order.customer_name} · {order.pickup_window}</span>
-                      </div>
-                      <StatusBadge value={boardItem?.status ?? order.order_status} />
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
-          </Show>
-
-          <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn trong danh sách để xem chi tiết.</p>}>
-            {(order) => (
-              <>
-                <div class="detail-grid">
-                  <Detail label="Mã đơn" value={order().order_id} />
-                  <Detail label="Thanh toán" value={statusLabel(order().payment_status)} />
-                  <Detail label="Trạng thái đơn" value={statusLabel(order().order_status)} />
-                  <Detail label="Khung giờ" value={order().pickup_window} />
+          <div class="order-master-detail">
+            <Show when={orders().length > 0} fallback={<p class="empty-state">Chưa có đơn hàng nào.</p>}>
+              <div class="order-list scroll-list">
+                <div class="subsection-heading">
+                  <h3>Danh sách đơn</h3>
+                  <span>{orders().length} đơn</span>
                 </div>
-
-                <div class="timeline">
-                  <For each={orderSteps}>
-                    {(step) => (
-                      <div
-                        class={`timeline-step ${isStepReached(selectedBoardItem()?.status ?? order().order_status, step) ? "active" : ""}`}
+                <For each={orders()}>
+                  {(order) => {
+                    const boardItem = board().find((item) => item.order_id === order.order_id);
+                    return (
+                      <button
+                        class={`order-list-item ${selectedOrderId() === order.order_id ? "selected" : ""}`}
+                        type="button"
+                        onClick={() => setSelectedOrderId(order.order_id)}
                       >
-                        <span />
-                        <p>{statusLabel(step)}</p>
-                      </div>
-                    )}
-                  </For>
-                </div>
+                        <div>
+                          <strong>{shortId(order.order_id)}</strong>
+                          <span>{order.customer_name} · {order.pickup_window}</span>
+                        </div>
+                        <StatusBadge value={boardItem?.status ?? order.order_status} />
+                      </button>
+                    );
+                  }}
+                </For>
+              </div>
+            </Show>
 
-                <div class="item-stack">
-                  <For each={order().items}>
-                    {(item) => (
-                      <div class="compact-row">
-                        <span>{productNameBySku(item.sku)}</span>
-                        <strong>x{item.quantity}</strong>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </>
-            )}
-          </Show>
+            <div class="order-detail-surface">
+              <Show when={selectedOrder()} fallback={<p class="empty-state">Chọn một đơn trong danh sách để xem chi tiết.</p>}>
+                {(order) => (
+                  <>
+                    <div class="subsection-heading">
+                      <h3>Chi tiết đơn</h3>
+                      <StatusBadge value={selectedOrderBoardItem()?.status ?? order().order_status} />
+                    </div>
+
+                    <div class="detail-grid">
+                      <Detail label="Mã đơn" value={order().order_id} />
+                      <Detail label="Khách hàng" value={order().customer_name} />
+                      <Detail label="Thanh toán" value={statusLabel(order().payment_status)} />
+                      <Detail label="Khung giờ" value={order().pickup_window} />
+                      <Detail label="Ô nhận" value={pickupSlotLabel(order().order_status, selectedOrderBoardItem())} />
+                      <Detail label="Mã nhận hàng" value={selectedOrderBoardItem()?.token ?? "Chưa sẵn sàng"} />
+                    </div>
+
+                    <div class="timeline">
+                      <For each={orderSteps}>
+                        {(step) => (
+                          <div
+                            class={`timeline-step ${isStepReached(selectedOrderBoardItem()?.status ?? order().order_status, step) ? "active" : ""}`}
+                          >
+                            <span />
+                            <p>{statusLabel(step)}</p>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+
+                    <div class="item-stack">
+                      <For each={order().items}>
+                        {(item) => (
+                          <div class="compact-row">
+                            <span>{productNameBySku(item.sku)}</span>
+                            <strong>x{item.quantity}</strong>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </>
+                )}
+              </Show>
+            </div>
+          </div>
           </section>
         </Show>
 
@@ -859,13 +876,23 @@ function App() {
           <Show when={analytics().recent_events.length > 0} fallback={<p class="empty-state">Chưa có sự kiện mới.</p>}>
             <div class="event-list">
               <For each={analytics().recent_events.slice(-8).reverse()}>
-                {(event) => (
-                  <div class="event-row">
-                    <strong>{eventTypeLabel(event.event_type)}</strong>
-                    <span>{shortId(event.aggregate_id)}</span>
-                    <small>{sourceLabel(event.source)}</small>
-                  </div>
-                )}
+                {(event) => {
+                  const order = orders().find((item) => item.order_id === event.aggregate_id);
+                  const boardItem = board().find((item) => item.order_id === event.aggregate_id);
+                  return (
+                    <div class="event-row rich-event-row">
+                      <div>
+                        <strong>{eventTypeLabel(event.event_type)}</strong>
+                        <span>{order ? `${order.customer_name} · ${order.pickup_window}` : "Chưa khớp với đơn hàng"}</span>
+                      </div>
+                      <span>{shortId(event.aggregate_id)}</span>
+                      <Show when={order}>
+                        <StatusBadge value={boardItem?.status ?? order?.order_status ?? "Paid"} />
+                      </Show>
+                      <small>{sourceLabel(event.source)}</small>
+                    </div>
+                  );
+                }}
               </For>
             </div>
           </Show>

@@ -414,6 +414,29 @@ h3 {
   background: #f3f8f1;
 }
 
+.order-master-detail {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.scroll-list {
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.order-detail-surface {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid #e3e4d9;
+  border-radius: 8px;
+  background: #fbfdf8;
+  padding: 12px;
+}
+
 .product-row input {
   width: 74px;
   text-align: center;
@@ -763,9 +786,20 @@ h3 {
   align-items: center;
 }
 
+.rich-event-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.rich-event-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 @media (max-width: 980px) {
   .customer-grid,
-  .admin-grid {
+  .admin-grid,
+  .order-master-detail {
     grid-template-columns: 1fr;
   }
 
@@ -791,7 +825,8 @@ h3 {
   .board-item,
   .receipt,
   .reservation-row,
-  .event-row {
+  .event-row,
+  .rich-event-row {
     align-items: stretch;
     display: flex;
     flex-direction: column;
