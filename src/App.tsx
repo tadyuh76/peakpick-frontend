@@ -182,9 +182,39 @@ function App() {
     }
     if (boardItem.status === "SlotAssigned") return "Bước tiếp theo: bắt đầu chuẩn bị đơn.";
     if (boardItem.status === "Preparing" || boardItem.status === "PlacedInSlot") return "Bước tiếp theo: báo đơn đã sẵn sàng nhận.";
-    if (boardItem.status === "ReadyForPickup") return "Nhập hoặc giữ mã nhận hàng rồi xác nhận khách đã nhận.";
+    if (boardItem.status === "ReadyForPickup") return "Đối chiếu mã nhận hàng với khách rồi xác nhận.";
     if (boardItem.status === "Completed") return "Đơn đã hoàn tất, không còn thao tác tiếp theo.";
     return "Các nút chỉ mở khi đơn đang ở đúng bước tiếp theo.";
+  });
+
+  const nextOrderAction = createMemo(() => {
+    const boardItem = selectedOrderBoardItem();
+    if (!boardItem) return null;
+    if (boardItem.status === "SlotAssigned") {
+      return {
+        label: "Bắt đầu chuẩn bị",
+        icon: RefreshCw,
+        disabled: busy(),
+        action: markPreparing
+      };
+    }
+    if (boardItem.status === "Preparing" || boardItem.status === "PlacedInSlot") {
+      return {
+        label: "Báo sẵn sàng nhận",
+        icon: CheckCircle2,
+        disabled: busy(),
+        action: markReady
+      };
+    }
+    if (boardItem.status === "ReadyForPickup") {
+      return {
+        label: "Xác nhận khách đã nhận",
+        icon: TicketCheck,
+        disabled: busy() || !pickupToken().trim(),
+        action: verifyPickup
+      };
+    }
+    return null;
   });
 
   const slotDashboardRows = createMemo(() =>
@@ -502,7 +532,7 @@ function App() {
               <For each={pickupWindowOptions()}>
                 {(window) => (
                   <option value={window.pickup_window} disabled={window.available <= 0}>
-                    {window.pickup_window} - còn {window.available} ô
+                    {window.pickup_window} - trống {window.available} ô
                   </option>
                 )}
               </For>
@@ -783,31 +813,22 @@ function App() {
                         <span>{selectedOrderBoardItem()?.slot_id ?? "Chưa vào hàng chờ"}</span>
                       </div>
 
-                      <div class="staff-actions">
-                        <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
-                          <RefreshCw size={17} />
-                          Bắt đầu chuẩn bị
-                        </button>
-                        <button disabled={busy() || !canMarkReady()} onClick={markReady}>
-                          <CheckCircle2 size={17} />
-                          Báo sẵn sàng
-                        </button>
+                      <div class="readonly-token">
+                        <span>Mã nhận hàng</span>
+                        <strong>{selectedOrderBoardItem()?.token ?? "Chưa sẵn sàng"}</strong>
                       </div>
 
-                      <label>
-                        Mã nhận hàng
-                        <input
-                          value={pickupToken()}
-                          onInput={(event) => setPickupToken(event.currentTarget.value)}
-                          placeholder="PK-XXXXXX"
-                          disabled={!selectedOrderBoardItem()}
-                        />
-                      </label>
-
-                      <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
-                        <TicketCheck size={18} />
-                        Xác nhận nhận hàng
-                      </button>
+                      <Show when={nextOrderAction()} fallback={<p class="empty-state compact">Không có thao tác tiếp theo.</p>}>
+                        {(nextAction) => {
+                          const Icon = nextAction().icon;
+                          return (
+                            <button class="primary-action confirm" disabled={nextAction().disabled} onClick={nextAction().action}>
+                              <Icon size={18} />
+                              {nextAction().label}
+                            </button>
+                          );
+                        }}
+                      </Show>
 
                       <p class="helper-text">{actionHint()}</p>
                     </div>
@@ -836,7 +857,7 @@ function App() {
                 <div class="capacity-strip">
                   <Metric label="Tổng ô" value={window.capacity} />
                   <Metric label="Đã đặt" value={window.used} />
-                  <Metric label="Còn trống" value={window.available} />
+                  <Metric label="Ô trống" value={window.available} />
                 </div>
                 <div class="slot-grid">
                   <For each={window.slotRows}>
@@ -995,7 +1016,7 @@ function readCustomerOrderIds() {
 
 function statusLabel(value: string) {
   const labels: Record<string, string> = {
-    Available: "Còn trống",
+    Available: "Ô trống",
     CartCreated: "Đã tạo giỏ",
     Completed: "Hoàn tất",
     Expired: "Hết hạn",
@@ -1004,8 +1025,8 @@ function statusLabel(value: string) {
     PaymentPending: "Chờ thanh toán",
     PlacedInSlot: "Đã đặt vào ô",
     Preparing: "Đang chuẩn bị",
-    Ready: "Sẵn sàng",
-    ReadyForPickup: "Sẵn sàng nhận",
+    Ready: "Chờ khách nhận",
+    ReadyForPickup: "Chờ khách nhận",
     RefundRequested: "Yêu cầu hoàn tiền",
     Reserved: "Đã giữ ô",
     SlotAssigned: "Đã gán ô",

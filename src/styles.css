@@ -573,6 +573,30 @@ h3 {
   padding-top: 12px;
 }
 
+.readonly-token {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e3e4d9;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.readonly-token span {
+  color: #667067;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.readonly-token strong {
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.empty-state.compact {
+  padding: 10px 12px;
+}
+
 .selected-order-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -606,8 +630,8 @@ h3 {
 }
 
 .status-badge.available {
-  background: #e9f0ff;
-  color: #2f579c;
+  background: #eef1ec;
+  color: #56615a;
 }
 
 .metric-grid {
@@ -788,7 +812,7 @@ h3 {
   gap: 5px;
   border: 1px solid #dbe1d6;
   border-radius: 8px;
-  background: #f7fbf5;
+  background: #ffffff;
   padding: 10px;
 }
 
@@ -814,8 +838,8 @@ h3 {
 }
 
 .slot-tile.available {
-  border-color: #dbe1d6;
-  background: #f7fbf5;
+  border-color: #d4d9d2;
+  background: #fafbf8;
 }
 
 .reservation-row {
