@@ -531,6 +531,13 @@ h3 {
   gap: 8px;
 }
 
+.staff-action-panel {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #e6e8dd;
+  padding-top: 12px;
+}
+
 .selected-order-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

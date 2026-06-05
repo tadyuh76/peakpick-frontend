@@ -214,6 +214,11 @@ function App() {
 
   createEffect(() => {
     const currentSelection = selectedOrderId();
+    if (activeAdminTab() === "staff") {
+      if (currentSelection && board().some((item) => item.order_id === currentSelection)) return;
+      setSelectedOrderId(board()[0]?.order_id ?? "");
+      return;
+    }
     if (currentSelection && orders().some((order) => order.order_id === currentSelection)) return;
     setSelectedOrderId(board()[0]?.order_id ?? orders()[0]?.order_id ?? "");
   });
@@ -630,65 +635,121 @@ function App() {
             </button>
           </div>
 
-          <Show when={board().length > 0} fallback={<p class="empty-state">Chưa có đơn nào được gán ô nhận.</p>}>
-            <div class="board-list">
-              <For each={board()}>
-                {(item) => (
-                  <button
-                    class={`board-item ${selectedOrderId() === item.order_id ? "selected" : ""}`}
-                    type="button"
-                    onClick={() => setSelectedOrderId(item.order_id)}
-                  >
-                    <div class="board-main">
-                      <strong>{item.slot_id}</strong>
-                      <span>{item.pickup_window}</span>
-                    </div>
-                    <StatusBadge value={item.status} />
-                    <p>{shortId(item.order_id)}</p>
-                  </button>
-                )}
-              </For>
-            </div>
-          </Show>
-
-          <Show when={selectedBoardItem()}>
-            {(item) => (
-              <div class="selected-order-card">
-                <Detail label="Đơn được chọn" value={item().order_id} />
-                <Detail label="Ô nhận" value={item().slot_id} />
-                <Detail label="Khung giờ" value={item().pickup_window} />
-                <Detail label="Trạng thái" value={statusLabel(item().status)} />
+          <div class="order-master-detail">
+            <Show
+              when={board().length > 0}
+              fallback={
+                <p class="empty-state">
+                  Chưa có đơn nào trong hàng chờ xử lý. Tab này chỉ hiện đơn đã được gán ô nhận trong phiên vận hành hiện tại.
+                </p>
+              }
+            >
+              <div class="order-list scroll-list">
+                <div class="subsection-heading">
+                  <h3>Hàng chờ xử lý</h3>
+                  <span>{board().length} đơn</span>
+                </div>
+                <For each={board()}>
+                  {(item) => {
+                    const order = orders().find((current) => current.order_id === item.order_id);
+                    return (
+                      <button
+                        class={`order-list-item ${selectedOrderId() === item.order_id ? "selected" : ""}`}
+                        type="button"
+                        onClick={() => setSelectedOrderId(item.order_id)}
+                      >
+                        <div>
+                          <strong>{item.slot_id}</strong>
+                          <span>{order?.customer_name ?? shortId(item.order_id)} · {item.pickup_window}</span>
+                        </div>
+                        <StatusBadge value={item.status} />
+                      </button>
+                    );
+                  }}
+                </For>
               </div>
-            )}
-          </Show>
+            </Show>
 
-          <div class="staff-actions">
-            <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
-              <RefreshCw size={17} />
-              Bắt đầu chuẩn bị
-            </button>
-            <button disabled={busy() || !canMarkReady()} onClick={markReady}>
-              <CheckCircle2 size={17} />
-              Báo sẵn sàng
-            </button>
+            <div class="order-detail-surface">
+              <Show when={selectedBoardItem()} fallback={<p class="empty-state">Chọn một đơn trong hàng chờ để thao tác.</p>}>
+                {(item) => (
+                  <>
+                    <div class="subsection-heading">
+                      <h3>Thao tác đơn</h3>
+                      <StatusBadge value={item().status} />
+                    </div>
+
+                    <div class="detail-grid">
+                      <Detail label="Mã đơn" value={item().order_id} />
+                      <Detail label="Khách hàng" value={selectedOrder()?.customer_name ?? "Không rõ"} />
+                      <Detail label="Ô nhận" value={item().slot_id} />
+                      <Detail label="Khung giờ" value={item().pickup_window} />
+                      <Detail label="Trạng thái" value={statusLabel(item().status)} />
+                      <Detail label="Mã nhận hàng" value={item().token ?? "Chưa sẵn sàng"} />
+                    </div>
+
+                    <Show when={selectedOrder()}>
+                      {(order) => (
+                        <>
+                          <div class="timeline">
+                            <For each={orderSteps}>
+                              {(step) => (
+                                <div class={`timeline-step ${isStepReached(item().status ?? order().order_status, step) ? "active" : ""}`}>
+                                  <span />
+                                  <p>{statusLabel(step)}</p>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+
+                          <div class="item-stack">
+                            <For each={order().items}>
+                              {(orderItem) => (
+                                <div class="compact-row">
+                                  <span>{productNameBySku(orderItem.sku)}</span>
+                                  <strong>x{orderItem.quantity}</strong>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </>
+                      )}
+                    </Show>
+
+                    <div class="staff-action-panel">
+                      <div class="staff-actions">
+                        <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
+                          <RefreshCw size={17} />
+                          Bắt đầu chuẩn bị
+                        </button>
+                        <button disabled={busy() || !canMarkReady()} onClick={markReady}>
+                          <CheckCircle2 size={17} />
+                          Báo sẵn sàng
+                        </button>
+                      </div>
+
+                      <label>
+                        Mã nhận hàng
+                        <input
+                          value={pickupToken()}
+                          onInput={(event) => setPickupToken(event.currentTarget.value)}
+                          placeholder="PK-XXXXXX"
+                          disabled={!selectedBoardItem()}
+                        />
+                      </label>
+
+                      <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
+                        <TicketCheck size={18} />
+                        Xác nhận nhận hàng
+                      </button>
+
+                      <p class="helper-text">Các nút chỉ mở khi đơn được chọn đang ở đúng bước tiếp theo.</p>
+                    </div>
+                  </>
+                )}
+              </Show>
+            </div>
           </div>
-
-          <label>
-            Mã nhận hàng
-            <input
-              value={pickupToken()}
-              onInput={(event) => setPickupToken(event.currentTarget.value)}
-              placeholder="PK-XXXXXX"
-              disabled={!selectedBoardItem()}
-            />
-          </label>
-
-          <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
-            <TicketCheck size={18} />
-            Xác nhận nhận hàng
-          </button>
-
-          <p class="helper-text">Các nút chỉ mở khi đơn được chọn đang ở đúng bước tiếp theo.</p>
           </section>
         </Show>
 
