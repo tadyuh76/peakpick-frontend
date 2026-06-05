@@ -170,6 +170,23 @@ function App() {
     () => selectedBoardItem()?.status === "ReadyForPickup" && pickupToken().trim().length > 0
   );
 
+  const actionHint = createMemo(() => {
+    const boardItem = selectedOrderBoardItem();
+    const order = selectedOrder();
+    if (!order) return "Chọn một đơn để xem thao tác xử lý.";
+    if (!boardItem) {
+      if (order.order_status === "SlotAssignmentFailed") {
+        return "Đơn chưa được gán ô nhận nên không thể xử lý tại quầy.";
+      }
+      return "Đơn không có trong hàng chờ vận hành hiện tại. Nếu Docker vừa recreate service, store-ops board có thể đã bị reset.";
+    }
+    if (boardItem.status === "SlotAssigned") return "Bước tiếp theo: bắt đầu chuẩn bị đơn.";
+    if (boardItem.status === "Preparing" || boardItem.status === "PlacedInSlot") return "Bước tiếp theo: báo đơn đã sẵn sàng nhận.";
+    if (boardItem.status === "ReadyForPickup") return "Nhập hoặc giữ mã nhận hàng rồi xác nhận khách đã nhận.";
+    if (boardItem.status === "Completed") return "Đơn đã hoàn tất, không còn thao tác tiếp theo.";
+    return "Các nút chỉ mở khi đơn đang ở đúng bước tiếp theo.";
+  });
+
   const slotDashboardRows = createMemo(() =>
     pickupWindowOptions().map((window) => {
       const windowReservations = reservations().filter((reservation) => reservation.pickup_window === window.pickup_window);
@@ -760,51 +777,40 @@ function App() {
                       </For>
                     </div>
 
-                    <Show
-                      when={selectedOrderBoardItem()}
-                      fallback={
-                        <p class="empty-state">
-                          Đơn này chưa nằm trong hàng chờ vận hành hiện tại nên không có thao tác xử lý.
-                        </p>
-                      }
-                    >
-                      {(item) => (
-                        <div class="staff-action-panel">
-                          <div class="subsection-heading">
-                            <h3>Thao tác xử lý</h3>
-                            <span>{item().slot_id}</span>
-                          </div>
+                    <div class="staff-action-panel">
+                      <div class="subsection-heading">
+                        <h3>Thao tác xử lý</h3>
+                        <span>{selectedOrderBoardItem()?.slot_id ?? "Chưa vào hàng chờ"}</span>
+                      </div>
 
-                          <div class="staff-actions">
-                            <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
-                              <RefreshCw size={17} />
-                              Bắt đầu chuẩn bị
-                            </button>
-                            <button disabled={busy() || !canMarkReady()} onClick={markReady}>
-                              <CheckCircle2 size={17} />
-                              Báo sẵn sàng
-                            </button>
-                          </div>
+                      <div class="staff-actions">
+                        <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
+                          <RefreshCw size={17} />
+                          Bắt đầu chuẩn bị
+                        </button>
+                        <button disabled={busy() || !canMarkReady()} onClick={markReady}>
+                          <CheckCircle2 size={17} />
+                          Báo sẵn sàng
+                        </button>
+                      </div>
 
-                          <label>
-                            Mã nhận hàng
-                            <input
-                              value={pickupToken()}
-                              onInput={(event) => setPickupToken(event.currentTarget.value)}
-                              placeholder="PK-XXXXXX"
-                              disabled={!selectedOrderBoardItem()}
-                            />
-                          </label>
+                      <label>
+                        Mã nhận hàng
+                        <input
+                          value={pickupToken()}
+                          onInput={(event) => setPickupToken(event.currentTarget.value)}
+                          placeholder="PK-XXXXXX"
+                          disabled={!selectedOrderBoardItem()}
+                        />
+                      </label>
 
-                          <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
-                            <TicketCheck size={18} />
-                            Xác nhận nhận hàng
-                          </button>
+                      <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
+                        <TicketCheck size={18} />
+                        Xác nhận nhận hàng
+                      </button>
 
-                          <p class="helper-text">Các nút chỉ mở khi đơn được chọn đang ở đúng bước tiếp theo.</p>
-                        </div>
-                      )}
-                    </Show>
+                      <p class="helper-text">{actionHint()}</p>
+                    </div>
                   </>
                 )}
               </Show>
