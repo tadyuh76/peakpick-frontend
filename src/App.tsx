@@ -8,7 +8,6 @@ import {
   Copy,
   CreditCard,
   Layers3,
-  PackageCheck,
   RefreshCw,
   ShoppingCart,
   TicketCheck,
@@ -32,13 +31,12 @@ const LAST_CUSTOMER_ORDER_KEY = "peakpick:last-customer-order-id";
 const CUSTOMER_ORDER_IDS_KEY = "peakpick:customer-order-ids";
 const CUSTOMER_STATUS_SYNC_MS = 3000;
 type RouteId = "customer" | "admin";
-type AdminTabId = "staff" | "detail" | "evidence" | "capacity" | "reservations" | "events";
+type AdminTabId = "detail" | "evidence" | "capacity" | "reservations" | "events";
 const routeLinks = {
   customer: { id: "customer" as const, label: "khách hàng", path: "/user" },
   admin: { id: "admin" as const, label: "quản trị", path: "/admin" }
 };
 const adminTabs = [
-  { id: "staff" as const, label: "Xử lý đơn" },
   { id: "detail" as const, label: "Đơn hàng" },
   { id: "evidence" as const, label: "Hệ thống" },
   { id: "capacity" as const, label: "Công suất" },
@@ -66,7 +64,7 @@ function App() {
   const [analytics, setAnalytics] = createSignal<AnalyticsSnapshot>({ counts: {}, recent_events: [] });
   const [pickupToken, setPickupToken] = createSignal("");
   const [selectedOrderId, setSelectedOrderId] = createSignal("");
-  const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("staff");
+  const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("detail");
   const [busy, setBusy] = createSignal(false);
   const [autoRefreshing, setAutoRefreshing] = createSignal(false);
   const [initialLoading, setInitialLoading] = createSignal(true);
@@ -196,6 +194,28 @@ function App() {
     })
   );
 
+  const adminOrderGroups = createMemo(() => {
+    const groups = [
+      { id: "pending", label: "Chưa xử lý", orders: [] as Order[] },
+      { id: "working", label: "Đang chuẩn bị", orders: [] as Order[] },
+      { id: "ready", label: "Sẵn sàng nhận", orders: [] as Order[] },
+      { id: "done", label: "Hoàn tất", orders: [] as Order[] },
+      { id: "attention", label: "Cần kiểm tra", orders: [] as Order[] }
+    ];
+
+    for (const order of orders()) {
+      const boardItem = board().find((item) => item.order_id === order.order_id);
+      const status = boardItem?.status ?? order.order_status;
+      if (status === "SlotAssigned" || status === "Paid") groups[0].orders.push(order);
+      else if (status === "Preparing" || status === "PlacedInSlot") groups[1].orders.push(order);
+      else if (status === "ReadyForPickup" || status === "Ready") groups[2].orders.push(order);
+      else if (status === "Completed") groups[3].orders.push(order);
+      else groups[4].orders.push(order);
+    }
+
+    return groups.filter((group) => group.orders.length > 0);
+  });
+
   const syncRoute = () => setActiveView(routeFromPath(window.location.pathname));
 
   onMount(async () => {
@@ -214,11 +234,6 @@ function App() {
 
   createEffect(() => {
     const currentSelection = selectedOrderId();
-    if (activeAdminTab() === "staff") {
-      if (currentSelection && board().some((item) => item.order_id === currentSelection)) return;
-      setSelectedOrderId(board()[0]?.order_id ?? "");
-      return;
-    }
     if (currentSelection && orders().some((order) => order.order_id === currentSelection)) return;
     setSelectedOrderId(board()[0]?.order_id ?? orders()[0]?.order_id ?? "");
   });
@@ -623,136 +638,6 @@ function App() {
       </section>
 
       <section class={`admin-grid view-section ${activeView() === "admin" ? "active" : ""}`}>
-        <Show when={activeAdminTab() === "staff"}>
-          <section class="panel staff-panel" id="staff-board">
-          <div class="panel-heading split">
-            <div>
-              <PackageCheck size={19} />
-              <h2>Xử lý đơn tại quầy</h2>
-            </div>
-            <button class="icon-action" onClick={() => runAction("Đã làm mới dữ liệu vận hành", refreshOperationalData)} title="Làm mới">
-              <RefreshCw size={17} />
-            </button>
-          </div>
-
-          <div class="order-master-detail">
-            <Show
-              when={board().length > 0}
-              fallback={
-                <p class="empty-state">
-                  Chưa có đơn nào trong hàng chờ xử lý. Tab này chỉ hiện đơn đã được gán ô nhận trong phiên vận hành hiện tại.
-                </p>
-              }
-            >
-              <div class="order-list scroll-list">
-                <div class="subsection-heading">
-                  <h3>Hàng chờ xử lý</h3>
-                  <span>{board().length} đơn</span>
-                </div>
-                <For each={board()}>
-                  {(item) => {
-                    const order = orders().find((current) => current.order_id === item.order_id);
-                    return (
-                      <button
-                        class={`order-list-item ${selectedOrderId() === item.order_id ? "selected" : ""}`}
-                        type="button"
-                        onClick={() => setSelectedOrderId(item.order_id)}
-                      >
-                        <div>
-                          <strong>{item.slot_id}</strong>
-                          <span>{order?.customer_name ?? shortId(item.order_id)} · {item.pickup_window}</span>
-                        </div>
-                        <StatusBadge value={item.status} />
-                      </button>
-                    );
-                  }}
-                </For>
-              </div>
-            </Show>
-
-            <div class="order-detail-surface">
-              <Show when={selectedBoardItem()} fallback={<p class="empty-state">Chọn một đơn trong hàng chờ để thao tác.</p>}>
-                {(item) => (
-                  <>
-                    <div class="subsection-heading">
-                      <h3>Thao tác đơn</h3>
-                      <StatusBadge value={item().status} />
-                    </div>
-
-                    <div class="detail-grid">
-                      <Detail label="Mã đơn" value={item().order_id} />
-                      <Detail label="Khách hàng" value={selectedOrder()?.customer_name ?? "Không rõ"} />
-                      <Detail label="Ô nhận" value={item().slot_id} />
-                      <Detail label="Khung giờ" value={item().pickup_window} />
-                      <Detail label="Trạng thái" value={statusLabel(item().status)} />
-                      <Detail label="Mã nhận hàng" value={item().token ?? "Chưa sẵn sàng"} />
-                    </div>
-
-                    <Show when={selectedOrder()}>
-                      {(order) => (
-                        <>
-                          <div class="timeline">
-                            <For each={orderSteps}>
-                              {(step) => (
-                                <div class={`timeline-step ${isStepReached(item().status ?? order().order_status, step) ? "active" : ""}`}>
-                                  <span />
-                                  <p>{statusLabel(step)}</p>
-                                </div>
-                              )}
-                            </For>
-                          </div>
-
-                          <div class="item-stack">
-                            <For each={order().items}>
-                              {(orderItem) => (
-                                <div class="compact-row">
-                                  <span>{productNameBySku(orderItem.sku)}</span>
-                                  <strong>x{orderItem.quantity}</strong>
-                                </div>
-                              )}
-                            </For>
-                          </div>
-                        </>
-                      )}
-                    </Show>
-
-                    <div class="staff-action-panel">
-                      <div class="staff-actions">
-                        <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
-                          <RefreshCw size={17} />
-                          Bắt đầu chuẩn bị
-                        </button>
-                        <button disabled={busy() || !canMarkReady()} onClick={markReady}>
-                          <CheckCircle2 size={17} />
-                          Báo sẵn sàng
-                        </button>
-                      </div>
-
-                      <label>
-                        Mã nhận hàng
-                        <input
-                          value={pickupToken()}
-                          onInput={(event) => setPickupToken(event.currentTarget.value)}
-                          placeholder="PK-XXXXXX"
-                          disabled={!selectedBoardItem()}
-                        />
-                      </label>
-
-                      <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
-                        <TicketCheck size={18} />
-                        Xác nhận nhận hàng
-                      </button>
-
-                      <p class="helper-text">Các nút chỉ mở khi đơn được chọn đang ở đúng bước tiếp theo.</p>
-                    </div>
-                  </>
-                )}
-              </Show>
-            </div>
-          </div>
-          </section>
-        </Show>
-
         <Show when={activeAdminTab() === "evidence"}>
           <section class="panel insight-panel" id="system-evidence">
           <div class="panel-heading">
@@ -785,9 +670,14 @@ function App() {
 
         <Show when={activeAdminTab() === "detail"}>
           <section class="panel order-detail-panel" id="order-detail">
-          <div class="panel-heading">
-            <ClipboardList size={19} />
-            <h2>Đơn hàng</h2>
+          <div class="panel-heading split">
+            <div>
+              <ClipboardList size={19} />
+              <h2>Đơn hàng</h2>
+            </div>
+            <button class="icon-action" onClick={() => runAction("Đã làm mới dữ liệu vận hành", refreshOperationalData)} title="Làm mới">
+              <RefreshCw size={17} />
+            </button>
           </div>
 
           <div class="order-master-detail">
@@ -797,23 +687,33 @@ function App() {
                   <h3>Danh sách đơn</h3>
                   <span>{orders().length} đơn</span>
                 </div>
-                <For each={orders()}>
-                  {(order) => {
-                    const boardItem = board().find((item) => item.order_id === order.order_id);
-                    return (
-                      <button
-                        class={`order-list-item ${selectedOrderId() === order.order_id ? "selected" : ""}`}
-                        type="button"
-                        onClick={() => setSelectedOrderId(order.order_id)}
-                      >
-                        <div>
-                          <strong>{shortId(order.order_id)}</strong>
-                          <span>{order.customer_name} · {order.pickup_window}</span>
-                        </div>
-                        <StatusBadge value={boardItem?.status ?? order.order_status} />
-                      </button>
-                    );
-                  }}
+                <For each={adminOrderGroups()}>
+                  {(group) => (
+                    <div class="order-group">
+                      <div class="order-group-heading">
+                        <span>{group.label}</span>
+                        <small>{group.orders.length}</small>
+                      </div>
+                      <For each={group.orders}>
+                        {(order) => {
+                          const boardItem = board().find((item) => item.order_id === order.order_id);
+                          return (
+                            <button
+                              class={`order-list-item ${selectedOrderId() === order.order_id ? "selected" : ""}`}
+                              type="button"
+                              onClick={() => setSelectedOrderId(order.order_id)}
+                            >
+                              <div>
+                                <strong>{shortId(order.order_id)}</strong>
+                                <span>{order.customer_name} · {order.pickup_window}</span>
+                              </div>
+                              <StatusBadge value={boardItem?.status ?? order.order_status} />
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  )}
                 </For>
               </div>
             </Show>
@@ -859,6 +759,52 @@ function App() {
                         )}
                       </For>
                     </div>
+
+                    <Show
+                      when={selectedOrderBoardItem()}
+                      fallback={
+                        <p class="empty-state">
+                          Đơn này chưa nằm trong hàng chờ vận hành hiện tại nên không có thao tác xử lý.
+                        </p>
+                      }
+                    >
+                      {(item) => (
+                        <div class="staff-action-panel">
+                          <div class="subsection-heading">
+                            <h3>Thao tác xử lý</h3>
+                            <span>{item().slot_id}</span>
+                          </div>
+
+                          <div class="staff-actions">
+                            <button disabled={busy() || !canMarkPreparing()} onClick={markPreparing}>
+                              <RefreshCw size={17} />
+                              Bắt đầu chuẩn bị
+                            </button>
+                            <button disabled={busy() || !canMarkReady()} onClick={markReady}>
+                              <CheckCircle2 size={17} />
+                              Báo sẵn sàng
+                            </button>
+                          </div>
+
+                          <label>
+                            Mã nhận hàng
+                            <input
+                              value={pickupToken()}
+                              onInput={(event) => setPickupToken(event.currentTarget.value)}
+                              placeholder="PK-XXXXXX"
+                              disabled={!selectedOrderBoardItem()}
+                            />
+                          </label>
+
+                          <button class="primary-action confirm" disabled={busy() || !canVerifyPickup()} onClick={verifyPickup}>
+                            <TicketCheck size={18} />
+                            Xác nhận nhận hàng
+                          </button>
+
+                          <p class="helper-text">Các nút chỉ mở khi đơn được chọn đang ở đúng bước tiếp theo.</p>
+                        </div>
+                      )}
+                    </Show>
                   </>
                 )}
               </Show>

@@ -414,6 +414,41 @@ h3 {
   background: #f3f8f1;
 }
 
+.order-group {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid #edf0e8;
+  padding-top: 10px;
+}
+
+.order-group:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.order-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #4f574e;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.order-group-heading small {
+  display: inline-flex;
+  min-width: 24px;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e8ede4;
+  color: #4a554d;
+  font-size: 0.74rem;
+}
+
 .order-master-detail {
   display: grid;
   grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
