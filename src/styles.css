@@ -208,6 +208,54 @@ h3 {
   padding: 12px 14px;
 }
 
+.admin-toast {
+  position: fixed;
+  top: 86px;
+  right: 18px;
+  z-index: 30;
+  display: flex;
+  width: min(330px, calc(100vw - 32px));
+  min-height: 62px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  border: 1px solid #8fcdb7;
+  border-radius: 8px;
+  background: #f0fbf6;
+  box-shadow: 0 12px 32px rgb(29 37 32 / 14%);
+  color: #17634d;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.admin-toast svg {
+  flex: 0 0 auto;
+}
+
+.admin-toast span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-toast strong,
+.admin-toast small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-toast strong {
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.admin-toast small {
+  color: #4f665c;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .module-alert {
   display: flex;
   align-items: center;

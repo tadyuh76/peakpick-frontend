@@ -30,8 +30,14 @@ const pickupWindows = ["09:30-09:35", "12:00-12:15", "17:30-17:45"];
 const LAST_CUSTOMER_ORDER_KEY = "peakpick:last-customer-order-id";
 const CUSTOMER_ORDER_IDS_KEY = "peakpick:customer-order-ids";
 const CUSTOMER_STATUS_SYNC_MS = 3000;
+const ADMIN_STATUS_SYNC_MS = 3000;
 type RouteId = "customer" | "admin";
 type AdminTabId = "detail" | "evidence" | "capacity" | "reservations" | "events";
+type AdminToast = {
+  title: string;
+  body: string;
+  orderId: string;
+};
 const routeLinks = {
   customer: { id: "customer" as const, label: "khách hàng", path: "/user" },
   admin: { id: "admin" as const, label: "quản trị", path: "/admin" }
@@ -71,6 +77,10 @@ function App() {
   const [notice, setNotice] = createSignal("Giao diện đã sẵn sàng");
   const [error, setError] = createSignal("");
   const [dataErrors, setDataErrors] = createSignal<Record<string, string>>({});
+  const [seenAdminOrderIds, setSeenAdminOrderIds] = createSignal<string[]>([]);
+  const [adminOrderBaselineReady, setAdminOrderBaselineReady] = createSignal(false);
+  const [adminToast, setAdminToast] = createSignal<AdminToast | null>(null);
+  let adminToastTimer: number | undefined;
 
   const pickupWindowOptions = createMemo(() => {
     const activeWindows = pickupWindowMeta().filter((item) => item.active);
@@ -270,6 +280,7 @@ function App() {
     try {
       await loadProducts();
       await refreshOperationalData();
+      syncAdminOrderBaseline();
     } finally {
       setInitialLoading(false);
     }
@@ -277,6 +288,7 @@ function App() {
 
   onCleanup(() => {
     window.removeEventListener("popstate", syncRoute);
+    if (adminToastTimer) window.clearTimeout(adminToastTimer);
   });
 
   createEffect(() => {
@@ -325,6 +337,23 @@ function App() {
     onCleanup(() => window.clearInterval(timer));
   });
 
+  createEffect(() => {
+    if (activeView() !== "admin" || initialLoading()) return;
+
+    let refreshInFlight = false;
+    const timer = window.setInterval(async () => {
+      if (refreshInFlight || busy() || document.visibilityState === "hidden") return;
+      refreshInFlight = true;
+      try {
+        await refreshAdminData();
+      } finally {
+        refreshInFlight = false;
+      }
+    }, ADMIN_STATUS_SYNC_MS);
+
+    onCleanup(() => window.clearInterval(timer));
+  });
+
   async function runAction(label: string, action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -353,6 +382,20 @@ function App() {
       loadResource("Nhật ký thông báo", peakpickApi.getNotifications, setNotifications),
       loadResource("Thống kê hệ thống", peakpickApi.getAnalytics, setAnalytics)
     ]);
+  }
+
+  async function refreshAdminData(options: { announceNewOrders?: boolean } = {}) {
+    const shouldAnnounce = options.announceNewOrders ?? true;
+    const previousOrderIds = new Set(seenAdminOrderIds());
+
+    await refreshOperationalData();
+
+    const currentOrders = orders();
+    const newOrders = currentOrders.filter((order) => !previousOrderIds.has(order.order_id));
+    if (shouldAnnounce && adminOrderBaselineReady() && newOrders.length > 0) {
+      showAdminOrderToast(newOrders);
+    }
+    syncAdminOrderBaseline();
   }
 
   async function refreshCustomerData() {
@@ -405,8 +448,8 @@ function App() {
     if (!item) return;
     await runAction("Đã chuyển đơn sang đang chuẩn bị", async () => {
       const updated = await peakpickApi.markPreparing(item.order_id);
-      replaceBoardItem(updated);
-      await refreshOperationalData();
+      applyBoardUpdate(updated);
+      queueAdminRefresh();
     });
   }
 
@@ -415,9 +458,8 @@ function App() {
     if (!item) return;
     await runAction("Đã chuyển đơn sang sẵn sàng nhận", async () => {
       const updated = await peakpickApi.markReady(item.order_id);
-      replaceBoardItem(updated);
-      setPickupToken(updated.token ?? "");
-      await refreshOperationalData();
+      applyBoardUpdate(updated);
+      queueAdminRefresh();
     });
   }
 
@@ -427,8 +469,8 @@ function App() {
     if (!item || !token) return;
     await runAction("Đã xác nhận khách đã nhận hàng", async () => {
       const updated = await peakpickApi.verifyPickup(item.order_id, token);
-      replaceBoardItem(updated);
-      await refreshOperationalData();
+      applyBoardUpdate(updated);
+      queueAdminRefresh();
     });
   }
 
@@ -455,6 +497,33 @@ function App() {
       if (!exists) return [updated, ...current];
       return current.map((item) => (item.order_id === updated.order_id ? updated : item));
     });
+  }
+
+  function applyBoardUpdate(updated: StaffBoardItem) {
+    replaceBoardItem(updated);
+    setSelectedOrderId(updated.order_id);
+    setPickupToken(updated.token ?? "");
+  }
+
+  function queueAdminRefresh() {
+    window.setTimeout(() => void refreshAdminData({ announceNewOrders: false }), 350);
+  }
+
+  function syncAdminOrderBaseline() {
+    setSeenAdminOrderIds(orders().map((order) => order.order_id));
+    setAdminOrderBaselineReady(true);
+  }
+
+  function showAdminOrderToast(newOrders: Order[]) {
+    const newestOrder = newOrders[newOrders.length - 1];
+    if (!newestOrder) return;
+    if (adminToastTimer) window.clearTimeout(adminToastTimer);
+    setAdminToast({
+      title: newOrders.length > 1 ? `${newOrders.length} đơn mới` : "Có đơn mới",
+      body: `${newestOrder.customer_name} · ${newestOrder.pickup_window} · ${shortId(newestOrder.order_id)}`,
+      orderId: newestOrder.order_id
+    });
+    adminToastTimer = window.setTimeout(() => setAdminToast(null), 5200);
   }
 
   async function copyOrderId() {
@@ -495,6 +564,26 @@ function App() {
           </a>
         </div>
       </header>
+
+      <Show when={activeView() === "admin" && adminToast()}>
+        {(toast) => (
+          <button
+            class="admin-toast"
+            type="button"
+            onClick={() => {
+              setActiveAdminTab("detail");
+              setSelectedOrderId(toast().orderId);
+              setAdminToast(null);
+            }}
+          >
+            <Bell size={17} />
+            <span>
+              <strong>{toast().title}</strong>
+              <small>{toast().body}</small>
+            </span>
+          </button>
+        )}
+      </Show>
 
       <Show when={activeView() === "admin"}>
         <nav class="section-nav" aria-label="Các mục quản trị">
@@ -733,7 +822,7 @@ function App() {
               <ClipboardList size={19} />
               <h2>Đơn hàng</h2>
             </div>
-            <button class="icon-action" onClick={() => runAction("Đã làm mới dữ liệu vận hành", refreshOperationalData)} title="Làm mới">
+            <button class="icon-action" onClick={() => runAction("Đã làm mới dữ liệu vận hành", refreshAdminData)} title="Làm mới">
               <RefreshCw size={17} />
             </button>
           </div>
@@ -833,7 +922,11 @@ function App() {
                         {(nextAction) => {
                           const Icon = nextAction().icon;
                           return (
-                            <button class="primary-action confirm" disabled={nextAction().disabled} onClick={nextAction().action}>
+                            <button
+                              class="primary-action confirm"
+                              disabled={nextAction().disabled}
+                              onClick={() => void nextAction().action()}
+                            >
                               <Icon size={18} />
                               {nextAction().label}
                             </button>
@@ -1036,8 +1129,8 @@ function statusLabel(value: string) {
     PaymentPending: "Chờ thanh toán",
     PlacedInSlot: "Đã đặt vào ô",
     Preparing: "Đang chuẩn bị",
-    Ready: "Chờ khách nhận",
-    ReadyForPickup: "Chờ khách nhận",
+    Ready: "Sẵn sàng nhận",
+    ReadyForPickup: "Sẵn sàng nhận",
     RefundRequested: "Yêu cầu hoàn tiền",
     Reserved: "Đã giữ ô",
     SlotAssigned: "Đã gán ô",
