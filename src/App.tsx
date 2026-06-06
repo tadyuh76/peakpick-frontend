@@ -404,7 +404,8 @@ function App() {
     const item = selectedBoardItem();
     if (!item) return;
     await runAction("Đã chuyển đơn sang đang chuẩn bị", async () => {
-      await peakpickApi.markPreparing(item.order_id);
+      const updated = await peakpickApi.markPreparing(item.order_id);
+      replaceBoardItem(updated);
       await refreshOperationalData();
     });
   }
@@ -414,6 +415,7 @@ function App() {
     if (!item) return;
     await runAction("Đã chuyển đơn sang sẵn sàng nhận", async () => {
       const updated = await peakpickApi.markReady(item.order_id);
+      replaceBoardItem(updated);
       setPickupToken(updated.token ?? "");
       await refreshOperationalData();
     });
@@ -424,7 +426,8 @@ function App() {
     const token = pickupToken().trim() || item?.token;
     if (!item || !token) return;
     await runAction("Đã xác nhận khách đã nhận hàng", async () => {
-      await peakpickApi.verifyPickup(item.order_id, token);
+      const updated = await peakpickApi.verifyPickup(item.order_id, token);
+      replaceBoardItem(updated);
       await refreshOperationalData();
     });
   }
@@ -443,6 +446,14 @@ function App() {
       const next = [orderId, ...current.filter((id) => id !== orderId)].slice(0, 8);
       window.localStorage.setItem(CUSTOMER_ORDER_IDS_KEY, JSON.stringify(next));
       return next;
+    });
+  }
+
+  function replaceBoardItem(updated: StaffBoardItem) {
+    setBoard((current) => {
+      const exists = current.some((item) => item.order_id === updated.order_id);
+      if (!exists) return [updated, ...current];
+      return current.map((item) => (item.order_id === updated.order_id ? updated : item));
     });
   }
 
