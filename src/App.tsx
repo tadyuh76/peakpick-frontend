@@ -80,6 +80,7 @@ function App() {
   const [seenAdminOrderIds, setSeenAdminOrderIds] = createSignal<string[]>([]);
   const [adminOrderBaselineReady, setAdminOrderBaselineReady] = createSignal(false);
   const [adminToast, setAdminToast] = createSignal<AdminToast | null>(null);
+  const [capacityDrafts, setCapacityDrafts] = createSignal<Record<string, string>>({});
   let adminToastTimer: number | undefined;
 
   const pickupWindowOptions = createMemo(() => {
@@ -231,7 +232,9 @@ function App() {
     pickupWindowOptions().map((window) => {
       const windowReservations = reservations().filter((reservation) => reservation.pickup_window === window.pickup_window);
       const activeReservations = windowReservations.filter((reservation) => reservation.status !== "Available");
-      const slotRows = slots().map((slot) => {
+      const highestActiveSlot = Math.max(0, ...activeReservations.map((reservation) => slotNumber(reservation.slot_id)));
+      const visibleSlotCount = Math.max(window.capacity, highestActiveSlot);
+      const slotRows = slots().filter((slot) => slotNumber(slot.slot_id) <= visibleSlotCount).map((slot) => {
         const reservation = windowReservations.find(
           (item) => item.slot_id === slot.slot_id && item.status !== "Available"
         );
@@ -246,6 +249,7 @@ function App() {
         capacity: window.capacity,
         used: activeReservations.length,
         available: Math.max(window.capacity - activeReservations.length, 0),
+        minimumCapacity: Math.max(1, highestActiveSlot),
         slotRows
       };
     })
@@ -474,6 +478,30 @@ function App() {
     });
   }
 
+  async function updatePickupWindowCapacity(pickupWindow: string, minimumCapacity: number) {
+    const rawCapacity = capacityDrafts()[pickupWindow] ?? "";
+    const capacity = Number(rawCapacity);
+    if (!Number.isInteger(capacity) || capacity < minimumCapacity) {
+      setError(`Số ô phải từ ${minimumCapacity} trở lên`);
+      return;
+    }
+
+    await runAction("Đã cập nhật số lượng ô nhận", async () => {
+      const updated = await peakpickApi.updatePickupWindowCapacity(pickupWindow, capacity);
+      setPickupWindowMeta((current) => {
+        const exists = current.some((item) => item.pickup_window === updated.pickup_window);
+        if (!exists) return [...current, updated];
+        return current.map((item) => (item.pickup_window === updated.pickup_window ? updated : item));
+      });
+      setCapacityDrafts((current) => {
+        const next = { ...current };
+        delete next[pickupWindow];
+        return next;
+      });
+      await refreshAdminData({ announceNewOrders: false });
+    });
+  }
+
   function updateQuantity(sku: string, value: number) {
     setQuantities((current) => ({ ...current, [sku]: Math.max(0, value) }));
   }
@@ -524,6 +552,14 @@ function App() {
       orderId: newestOrder.order_id
     });
     adminToastTimer = window.setTimeout(() => setAdminToast(null), 5200);
+  }
+
+  function capacityDraftValue(pickupWindow: string, capacity: number) {
+    return capacityDrafts()[pickupWindow] ?? String(capacity);
+  }
+
+  function setCapacityDraft(pickupWindow: string, value: string) {
+    setCapacityDrafts((current) => ({ ...current, [pickupWindow]: value }));
   }
 
   async function copyOrderId() {
@@ -958,6 +994,32 @@ function App() {
                   <h3>{window.pickup_window}</h3>
                   <span>Đã dùng {window.used}/{window.capacity}</span>
                 </div>
+                <form
+                  class="capacity-editor"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void updatePickupWindowCapacity(window.pickup_window, window.minimumCapacity);
+                  }}
+                >
+                  <label>
+                    Số ô nhận
+                    <input
+                      type="number"
+                      min={window.minimumCapacity}
+                      max="99"
+                      value={capacityDraftValue(window.pickup_window, window.capacity)}
+                      onInput={(event) => setCapacityDraft(window.pickup_window, event.currentTarget.value)}
+                    />
+                  </label>
+                  <button class="ghost-action" type="submit" disabled={busy()}>
+                    Cập nhật
+                  </button>
+                </form>
+                <Show when={window.minimumCapacity > 1}>
+                  <p class="helper-text">
+                    Tối thiểu {window.minimumCapacity} vì đang có đơn trong ô nhận hiện tại.
+                  </p>
+                </Show>
                 <div class="capacity-strip">
                   <Metric label="Tổng ô" value={window.capacity} />
                   <Metric label="Đã đặt" value={window.used} />
@@ -1181,6 +1243,7 @@ function notificationMessage(message: string) {
 function translateError(message: string) {
   if (message.includes("Invalid pickup token")) return "Mã nhận hàng không hợp lệ";
   if (message.includes("Order is not on the staff board")) return "Đơn chưa xuất hiện trên bảng nhân viên";
+  if (message.includes("Capacity must be at least")) return "Không thể giảm số ô thấp hơn ô đang có đơn";
   if (message.includes("Request failed")) return "Yêu cầu thất bại";
   return message;
 }
@@ -1201,6 +1264,11 @@ function formatCurrency(value: number) {
 
 function shortId(value: string) {
   return value.replace("order-", "").slice(0, 8);
+}
+
+function slotNumber(slotId: string) {
+  const parsed = Number(slotId.replace("P-", ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function routeFromPath(pathname: string): RouteId {

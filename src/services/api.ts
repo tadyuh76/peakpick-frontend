@@ -79,6 +79,13 @@ export const peakpickApi = {
     return requestJson<PickupWindow[]>("/slots/pickup-windows");
   },
 
+  updatePickupWindowCapacity(pickupWindow: string, capacity: number): Promise<PickupWindow> {
+    return requestJson<PickupWindow>(`/slots/pickup-windows/${encodeURIComponent(pickupWindow)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ capacity })
+    });
+  },
+
   getSlots(): Promise<PickupSlot[]> {
     return requestJson<PickupSlot[]>("/slots/slots");
   },
