@@ -4,6 +4,8 @@ export interface Product {
   category: string;
   price: number;
   available: boolean;
+  prep_time_minutes: number;
+  display_order: number;
 }
 
 export interface OrderItem {
@@ -40,6 +42,8 @@ export interface StaffBoardItem {
   token: string | null;
   correlation_id: string;
   updated_at: string;
+  verified_at?: string;
+  picked_up_at?: string;
 }
 
 export interface PickupWindow {
@@ -68,6 +72,21 @@ export interface NotificationLog {
   channel: string;
   status: string;
   sent_at: string;
+}
+
+export interface StockItem {
+  sku: string;
+  quantity: number;
+}
+
+export interface OperationsSummary {
+  orders_paid: number;
+  orders_ready: number;
+  orders_picked_up: number;
+  inventory_reservations: number;
+  inventory_shortages: number;
+  notifications_requested: number;
+  pickup_completion_rate: number;
 }
 
 export interface AnalyticsSnapshot {

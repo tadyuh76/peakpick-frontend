@@ -345,7 +345,8 @@ h3 {
 .feed-row,
 .board-item,
 .summary-line,
-.receipt {
+.receipt,
+.stock-total {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -527,6 +528,10 @@ h3 {
 
 .summary-line {
   background: #f3f8f1;
+}
+
+.stock-total {
+  background: #eef6f2;
 }
 
 .receipt.success {
@@ -762,6 +767,10 @@ h3 {
 .feed-row svg {
   flex: 0 0 auto;
   color: #9a6027;
+}
+
+.warning-row {
+  background: #fff7e9;
 }
 
 .empty-state {

@@ -18,11 +18,13 @@ import type {
   AnalyticsSnapshot,
   CheckoutResponse,
   NotificationLog,
+  OperationsSummary,
   Order,
   PickupSlot,
   PickupWindow,
   Product,
   SlotReservation,
+  StockItem,
   StaffBoardItem
 } from "./services/types";
 
@@ -66,8 +68,11 @@ function App() {
   const [pickupWindowMeta, setPickupWindowMeta] = createSignal<PickupWindow[]>([]);
   const [slots, setSlots] = createSignal<PickupSlot[]>([]);
   const [reservations, setReservations] = createSignal<SlotReservation[]>([]);
+  const [stock, setStock] = createSignal<Record<string, number>>({});
+  const [lowStock, setLowStock] = createSignal<StockItem[]>([]);
   const [notifications, setNotifications] = createSignal<NotificationLog[]>([]);
   const [analytics, setAnalytics] = createSignal<AnalyticsSnapshot>({ counts: {}, recent_events: [] });
+  const [summary, setSummary] = createSignal<OperationsSummary | null>(null);
   const [pickupToken, setPickupToken] = createSignal("");
   const [selectedOrderId, setSelectedOrderId] = createSignal("");
   const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("detail");
@@ -157,6 +162,10 @@ function App() {
       return sum + product.price * (quantities()[product.sku] ?? 0);
     }, 0)
   );
+
+  const totalStock = createMemo(() => {
+    return Object.values(stock()).reduce((sum, quantity) => sum + quantity, 0);
+  });
 
   const hasCheckoutInput = createMemo(
     () => customerName().trim().length > 0 && selectedItems().length > 0 && (selectedPickupWindowOption()?.available ?? 0) > 0
@@ -383,8 +392,11 @@ function App() {
       loadResource("Lịch giữ ô nhận", peakpickApi.getSlotReservations, setReservations),
       loadResource("Khung giờ nhận hàng", peakpickApi.getPickupWindows, setPickupWindowMeta),
       loadResource("Ô nhận", peakpickApi.getSlots, setSlots),
+      loadResource("Tồn kho", peakpickApi.getStock, setStock),
+      loadResource("Tồn kho thấp", () => peakpickApi.getLowStock(30), setLowStock),
       loadResource("Nhật ký thông báo", peakpickApi.getNotifications, setNotifications),
-      loadResource("Thống kê hệ thống", peakpickApi.getAnalytics, setAnalytics)
+      loadResource("Thống kê hệ thống", peakpickApi.getAnalytics, setAnalytics),
+      loadResource("Tóm tắt vận hành", peakpickApi.getOperationsSummary, setSummary)
     ]);
   }
 
@@ -408,7 +420,9 @@ function App() {
       loadResource("Bảng xử lý đơn", peakpickApi.getStaffBoard, setBoard),
       loadResource("Lịch giữ ô nhận", peakpickApi.getSlotReservations, setReservations),
       loadResource("Khung giờ nhận hàng", peakpickApi.getPickupWindows, setPickupWindowMeta),
-      loadResource("Ô nhận", peakpickApi.getSlots, setSlots)
+      loadResource("Ô nhận", peakpickApi.getSlots, setSlots),
+      loadResource("Tồn kho", peakpickApi.getStock, setStock),
+      loadResource("Tồn kho thấp", () => peakpickApi.getLowStock(30), setLowStock)
     ]);
   }
 
@@ -768,7 +782,6 @@ function App() {
                   <RefreshCw class={autoRefreshing() ? "spin" : ""} size={15} />
                   <span>{autoRefreshing() ? "Đang cập nhật trạng thái..." : "Tự cập nhật trạng thái mỗi 3 giây"}</span>
                 </div>
-
                 <div class="pickup-card">
                   <div>
                     <span>Ô nhận hàng</span>
@@ -829,10 +842,41 @@ function App() {
           </div>
 
           <div class="metric-grid">
-            <Metric label="Đơn đã thanh toán" value={analytics().counts.OrderPaid ?? 0} />
+            <Metric label="Đơn đã thanh toán" value={summary()?.orders_paid ?? analytics().counts.OrderPaid ?? 0} />
             <Metric label="Ô nhận đã đặt" value={analytics().counts.PickupSlotReserved ?? 0} />
-            <Metric label="Đơn sẵn sàng" value={analytics().counts.OrderReady ?? 0} />
-            <Metric label="Đã nhận" value={analytics().counts.OrderPickedUp ?? 0} />
+            <Metric label="Đơn sẵn sàng" value={summary()?.orders_ready ?? analytics().counts.OrderReady ?? 0} />
+            <Metric label="Đã nhận" value={summary()?.orders_picked_up ?? analytics().counts.OrderPickedUp ?? 0} />
+            <Metric label="Thiếu hàng" value={summary()?.inventory_shortages ?? 0} />
+          </div>
+
+          <div class="feed">
+            <h3>Tồn kho</h3>
+            <div class="stock-total">
+              <span>Tổng đơn vị</span>
+              <strong>{totalStock()}</strong>
+            </div>
+            <For each={Object.entries(stock()).slice(0, 5)}>
+              {([sku, quantity]) => (
+                <div class="slot-row">
+                  <span>{sku}</span>
+                  <strong>{quantity}</strong>
+                </div>
+              )}
+            </For>
+          </div>
+
+          <div class="feed">
+            <h3>Tồn kho thấp</h3>
+            <Show when={lowStock().length > 0} fallback={<p class="empty-state">Chưa có mặt hàng tồn kho thấp.</p>}>
+              <For each={lowStock().slice(0, 4)}>
+                {(item) => (
+                  <div class="slot-row warning-row">
+                    <span>{item.sku}</span>
+                    <strong>{item.quantity}</strong>
+                  </div>
+                )}
+              </For>
+            </Show>
           </div>
 
           <div class="feed">

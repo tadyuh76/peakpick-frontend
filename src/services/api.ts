@@ -4,10 +4,12 @@ import type {
   CheckoutResponse,
   Order,
   NotificationLog,
+  OperationsSummary,
   PickupSlot,
   PickupWindow,
   Product,
   SlotReservation,
+  StockItem,
   StaffBoardItem
 } from "./types";
 
@@ -48,8 +50,9 @@ export const peakpickApi = {
     return requestJson<Order[]>("/orders/orders");
   },
 
-  getStaffBoard(): Promise<StaffBoardItem[]> {
-    return requestJson<StaffBoardItem[]>("/store/board");
+  getStaffBoard(status?: string): Promise<StaffBoardItem[]> {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    return requestJson<StaffBoardItem[]>(`/store/board${query}`);
   },
 
   markPreparing(orderId: string): Promise<StaffBoardItem> {
@@ -75,6 +78,14 @@ export const peakpickApi = {
     return requestJson<SlotReservation[]>("/slots/reservations");
   },
 
+  getStock(): Promise<Record<string, number>> {
+    return requestJson<Record<string, number>>("/inventory/stock");
+  },
+
+  getLowStock(threshold = 30): Promise<StockItem[]> {
+    return requestJson<StockItem[]>(`/inventory/stock/low?threshold=${threshold}`);
+  },
+
   getPickupWindows(): Promise<PickupWindow[]> {
     return requestJson<PickupWindow[]>("/slots/pickup-windows");
   },
@@ -96,5 +107,9 @@ export const peakpickApi = {
 
   getAnalytics(): Promise<AnalyticsSnapshot> {
     return requestJson<AnalyticsSnapshot>("/analytics/events");
+  },
+
+  getOperationsSummary(): Promise<OperationsSummary> {
+    return requestJson<OperationsSummary>("/analytics/operations/summary");
   }
 };
