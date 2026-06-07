@@ -724,8 +724,10 @@ h3 {
 }
 
 .capacity-editor {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto;
+  display: inline-grid;
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: minmax(120px, 140px) auto;
   gap: 10px;
   align-items: end;
 }
