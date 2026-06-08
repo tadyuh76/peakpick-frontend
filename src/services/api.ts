@@ -1,7 +1,9 @@
 import type {
   AnalyticsSnapshot,
+  AuthUser,
   CheckoutRequest,
   CheckoutResponse,
+  LoginResponse,
   Order,
   NotificationLog,
   OperationsSummary,
@@ -14,11 +16,19 @@ import type {
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const AUTH_TOKEN_KEY = "peakpick:auth-token";
+export const AUTH_USER_KEY = "peakpick:auth-user";
+
+function authHeaders(): Record<string, string> {
+  const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
       ...options.headers
     },
     ...options
@@ -34,6 +44,17 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
 
 export const peakpickApi = {
   apiBaseUrl: API_BASE_URL,
+
+  login(username: string, password: string): Promise<LoginResponse> {
+    return requestJson<LoginResponse>("/identity/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    });
+  },
+
+  me(): Promise<AuthUser> {
+    return requestJson<AuthUser>("/identity/auth/me");
+  },
 
   listProducts(): Promise<Product[]> {
     return requestJson<Product[]>("/catalog/products");

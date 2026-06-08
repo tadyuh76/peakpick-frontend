@@ -14,6 +14,7 @@ export interface OrderItem {
 }
 
 export interface CheckoutRequest {
+  store_id?: string;
   customer_name: string;
   pickup_window: string;
   items: OrderItem[];
@@ -21,6 +22,7 @@ export interface CheckoutRequest {
 
 export interface Order {
   order_id: string;
+  store_id?: string;
   customer_name: string;
   items: OrderItem[];
   pickup_window: string;
@@ -36,6 +38,7 @@ export interface CheckoutResponse {
 
 export interface StaffBoardItem {
   order_id: string;
+  store_id?: string;
   slot_id: string;
   pickup_window: string;
   status: string;
@@ -47,18 +50,21 @@ export interface StaffBoardItem {
 }
 
 export interface PickupWindow {
+  store_id?: string;
   pickup_window: string;
   capacity: number;
   active: boolean;
 }
 
 export interface PickupSlot {
+  store_id?: string;
   slot_id: string;
   active: boolean;
 }
 
 export interface SlotReservation {
   order_id: string;
+  store_id?: string;
   slot_id: string;
   pickup_window: string;
   status: string;
@@ -68,6 +74,7 @@ export interface SlotReservation {
 
 export interface NotificationLog {
   order_id: string;
+  store_id?: string;
   message: string;
   channel: string;
   status: string;
@@ -96,5 +103,19 @@ export interface AnalyticsSnapshot {
     aggregate_id: string;
     correlation_id: string;
     source: string;
+    store_id?: string;
   }>;
+}
+
+export interface AuthUser {
+  username: string;
+  role: "admin" | "store_manager" | "customer";
+  store_id: string;
+  display_name: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
 }

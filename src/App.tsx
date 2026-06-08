@@ -8,14 +8,18 @@ import {
   Copy,
   CreditCard,
   Layers3,
+  LogIn,
+  LogOut,
   RefreshCw,
   ShoppingCart,
+  ShieldCheck,
   TicketCheck,
 } from "lucide-solid";
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { peakpickApi } from "./services/api";
+import { AUTH_TOKEN_KEY, AUTH_USER_KEY, peakpickApi } from "./services/api";
 import type {
   AnalyticsSnapshot,
+  AuthUser,
   CheckoutResponse,
   NotificationLog,
   OperationsSummary,
@@ -73,6 +77,9 @@ function App() {
   const [notifications, setNotifications] = createSignal<NotificationLog[]>([]);
   const [analytics, setAnalytics] = createSignal<AnalyticsSnapshot>({ counts: {}, recent_events: [] });
   const [summary, setSummary] = createSignal<OperationsSummary | null>(null);
+  const [authUser, setAuthUser] = createSignal<AuthUser | null>(readAuthUser());
+  const [loginUsername, setLoginUsername] = createSignal("manager.ueh@peakpick.local");
+  const [loginPassword, setLoginPassword] = createSignal("manager123");
   const [pickupToken, setPickupToken] = createSignal("");
   const [selectedOrderId, setSelectedOrderId] = createSignal("");
   const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("detail");
@@ -175,6 +182,10 @@ function App() {
     activeView() === "customer" ? "Đặt hàng nhận tại quầy" : "Quản trị đơn nhận hàng"
   );
   const roleSwitchLink = createMemo(() => (activeView() === "customer" ? routeLinks.admin : routeLinks.customer));
+  const canUseAdmin = createMemo(() => {
+    const role = authUser()?.role;
+    return role === "admin" || role === "store_manager";
+  });
 
   const canMarkPreparing = createMemo(() => {
     const status = selectedBoardItem()?.status;
@@ -292,7 +303,10 @@ function App() {
     window.addEventListener("popstate", syncRoute);
     try {
       await loadProducts();
-      await refreshOperationalData();
+      await refreshCustomerData();
+      if (canUseAdmin()) {
+        await refreshAdminData({ announceNewOrders: false });
+      }
       syncAdminOrderBaseline();
     } finally {
       setInitialLoading(false);
@@ -351,7 +365,7 @@ function App() {
   });
 
   createEffect(() => {
-    if (activeView() !== "admin" || initialLoading()) return;
+    if (activeView() !== "admin" || initialLoading() || !canUseAdmin()) return;
 
     let refreshInFlight = false;
     const timer = window.setInterval(async () => {
@@ -401,6 +415,7 @@ function App() {
   }
 
   async function refreshAdminData(options: { announceNewOrders?: boolean } = {}) {
+    if (!canUseAdmin()) return;
     const shouldAnnounce = options.announceNewOrders ?? true;
     const previousOrderIds = new Set(seenAdminOrderIds());
 
@@ -442,6 +457,23 @@ function App() {
       }));
       return false;
     }
+  }
+
+  async function login() {
+    await runAction("Đã đăng nhập trang quản trị", async () => {
+      const response = await peakpickApi.login(loginUsername().trim(), loginPassword());
+      window.localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
+      window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
+      setAuthUser(response.user);
+      await refreshAdminData({ announceNewOrders: false });
+    });
+  }
+
+  function logout() {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(AUTH_USER_KEY);
+    setAuthUser(null);
+    setNotice("Đã đăng xuất quản trị");
   }
 
   async function submitCheckout() {
@@ -598,6 +630,17 @@ function App() {
           <h1>{pageTitle()}</h1>
         </div>
         <div class="topbar-actions">
+          <Show when={authUser()}>
+            {(user) => (
+              <div class="auth-chip">
+                <ShieldCheck size={15} />
+                <span>{user().display_name} · {user().store_id}</span>
+                <button type="button" onClick={logout} title="Đăng xuất">
+                  <LogOut size={15} />
+                </button>
+              </div>
+            )}
+          </Show>
           <div class="status-strip">
             <span class="status-dot" />
             <span>{notice()}</span>
@@ -635,7 +678,7 @@ function App() {
         )}
       </Show>
 
-      <Show when={activeView() === "admin"}>
+      <Show when={activeView() === "admin" && canUseAdmin()}>
         <nav class="section-nav" aria-label="Các mục quản trị">
           <For each={adminTabs}>
             {(item) => (
@@ -834,7 +877,35 @@ function App() {
       </section>
 
       <section class={`admin-grid view-section ${activeView() === "admin" ? "active" : ""}`}>
-        <Show when={activeAdminTab() === "evidence"}>
+        <Show when={!canUseAdmin()}>
+          <section class="panel auth-panel">
+            <div class="panel-heading">
+              <LogIn size={19} />
+              <h2>Đăng nhập quản trị cửa hàng</h2>
+            </div>
+
+            <label>
+              Email
+              <input value={loginUsername()} onInput={(event) => setLoginUsername(event.currentTarget.value)} />
+            </label>
+
+            <label>
+              Mật khẩu
+              <input
+                type="password"
+                value={loginPassword()}
+                onInput={(event) => setLoginPassword(event.currentTarget.value)}
+              />
+            </label>
+
+            <button class="primary-action" disabled={busy()} onClick={login}>
+              <LogIn size={18} />
+              Đăng nhập
+            </button>
+          </section>
+        </Show>
+
+        <Show when={canUseAdmin() && activeAdminTab() === "evidence"}>
           <section class="panel insight-panel" id="system-evidence">
           <div class="panel-heading">
             <BarChart3 size={19} />
@@ -895,7 +966,7 @@ function App() {
           </section>
         </Show>
 
-        <Show when={activeAdminTab() === "detail"}>
+        <Show when={canUseAdmin() && activeAdminTab() === "detail"}>
           <section class="panel order-detail-panel" id="order-detail">
           <div class="panel-heading split">
             <div>
@@ -1024,7 +1095,7 @@ function App() {
           </section>
         </Show>
 
-        <Show when={activeAdminTab() === "capacity"}>
+        <Show when={canUseAdmin() && activeAdminTab() === "capacity"}>
           <section class="panel slot-dashboard-panel" id="slot-capacity">
           <div class="panel-heading">
             <Layers3 size={19} />
@@ -1086,7 +1157,7 @@ function App() {
           </section>
         </Show>
 
-        <Show when={activeAdminTab() === "reservations"}>
+        <Show when={canUseAdmin() && activeAdminTab() === "reservations"}>
           <section class="panel reservation-panel" id="reservations">
           <div class="panel-heading">
             <CalendarClock size={19} />
@@ -1110,7 +1181,7 @@ function App() {
           </section>
         </Show>
 
-        <Show when={activeAdminTab() === "events"}>
+        <Show when={canUseAdmin() && activeAdminTab() === "events"}>
           <section class="panel event-log-panel" id="event-log">
           <div class="panel-heading">
             <Activity size={19} />
@@ -1221,6 +1292,17 @@ function readCustomerOrderIds() {
     return lastOrderId && !ids.includes(lastOrderId) ? [lastOrderId, ...ids] : ids;
   } catch {
     return lastOrderId ? [lastOrderId] : [];
+  }
+}
+
+function readAuthUser(): AuthUser | null {
+  try {
+    const raw = window.localStorage.getItem(AUTH_USER_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    window.localStorage.removeItem(AUTH_USER_KEY);
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    return null;
   }
 }
 
