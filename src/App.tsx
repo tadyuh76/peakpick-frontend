@@ -5,7 +5,6 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
-  Copy,
   CreditCard,
   Layers3,
   LogIn,
@@ -84,7 +83,6 @@ function App() {
   const [selectedOrderId, setSelectedOrderId] = createSignal("");
   const [activeAdminTab, setActiveAdminTab] = createSignal<AdminTabId>("detail");
   const [busy, setBusy] = createSignal(false);
-  const [autoRefreshing, setAutoRefreshing] = createSignal(false);
   const [initialLoading, setInitialLoading] = createSignal(true);
   const [notice, setNotice] = createSignal("Giao diện đã sẵn sàng");
   const [error, setError] = createSignal("");
@@ -352,11 +350,9 @@ function App() {
     const timer = window.setInterval(async () => {
       if (refreshInFlight || busy() || document.visibilityState === "hidden") return;
       refreshInFlight = true;
-      setAutoRefreshing(true);
       try {
         await refreshCustomerData();
       } finally {
-        setAutoRefreshing(false);
         refreshInFlight = false;
       }
     }, CUSTOMER_STATUS_SYNC_MS);
@@ -430,6 +426,7 @@ function App() {
   }
 
   async function refreshCustomerData() {
+    clearDataErrors(["Nhật ký thông báo", "Thống kê hệ thống", "Tóm tắt vận hành"]);
     await Promise.all([
       loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
       loadResource("Bảng xử lý đơn", peakpickApi.getStaffBoard, setBoard),
@@ -457,6 +454,14 @@ function App() {
       }));
       return false;
     }
+  }
+
+  function clearDataErrors(keys: string[]) {
+    setDataErrors((current) => {
+      const next = { ...current };
+      for (const key of keys) delete next[key];
+      return next;
+    });
   }
 
   async function login() {
@@ -489,7 +494,7 @@ function App() {
       setSelectedOrderId(response.order.order_id);
       setPickupToken("");
       await new Promise((resolve) => setTimeout(resolve, 600));
-      await refreshOperationalData();
+      await refreshCustomerData();
     });
   }
 
@@ -606,13 +611,6 @@ function App() {
 
   function setCapacityDraft(pickupWindow: string, value: string) {
     setCapacityDrafts((current) => ({ ...current, [pickupWindow]: value }));
-  }
-
-  async function copyOrderId() {
-    const orderId = customerOrder()?.order_id;
-    if (!orderId) return;
-    await navigator.clipboard.writeText(orderId);
-    setNotice("Đã sao chép mã đơn");
   }
 
   function navigateToRoute(route: RouteId, path: string) {
@@ -772,17 +770,6 @@ function App() {
             </p>
           </Show>
 
-          <Show when={customerOrder()}>
-            {(order) => (
-              <div class="receipt success">
-                <span>{checkout() ? "Đã tạo đơn thanh toán" : "Đang theo dõi đơn được chọn"}</span>
-                <button class="ghost-action" onClick={copyOrderId} title="Sao chép mã đơn">
-                  <Copy size={16} />
-                  {shortId(order().order_id)}
-                </button>
-              </div>
-            )}
-          </Show>
         </section>
 
         <section class="panel customer-status-panel" id="pickup-status">
@@ -821,10 +808,6 @@ function App() {
           <Show when={customerOrder()}>
             {(order) => (
               <>
-                <div class="live-sync" aria-live="polite">
-                  <RefreshCw class={autoRefreshing() ? "spin" : ""} size={15} />
-                  <span>{autoRefreshing() ? "Đang cập nhật trạng thái..." : "Tự cập nhật trạng thái mỗi 3 giây"}</span>
-                </div>
                 <div class="pickup-card">
                   <div>
                     <span>Ô nhận hàng</span>
