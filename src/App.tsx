@@ -54,6 +54,7 @@ const adminTabs = [
   { id: "reservations" as const, label: "Lịch giữ ô" },
   { id: "events" as const, label: "Nhật ký" }
 ] satisfies Array<{ id: AdminTabId; label: string }>;
+const adminOnlyDataKeys = ["Nhật ký thông báo", "Thống kê hệ thống", "Tóm tắt vận hành"];
 
 function App() {
   const [activeView, setActiveView] = createSignal<RouteId>(routeFromPath(window.location.pathname));
@@ -448,9 +449,15 @@ function App() {
       });
       return true;
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Yêu cầu thất bại";
+      if (isAuthFailure(message)) {
+        clearAdminSession("Phiên quản trị đã hết hạn, vui lòng đăng nhập lại");
+        setError("");
+        return false;
+      }
       setDataErrors((current) => ({
         ...current,
-        [key]: err instanceof Error ? translateError(err.message) : "Yêu cầu thất bại"
+        [key]: translateError(message)
       }));
       return false;
     }
@@ -470,15 +477,21 @@ function App() {
       window.localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
       window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
       setAuthUser(response.user);
+      clearDataErrors(adminOnlyDataKeys);
       await refreshAdminData({ announceNewOrders: false });
     });
   }
 
   function logout() {
+    clearAdminSession("Đã đăng xuất quản trị");
+  }
+
+  function clearAdminSession(message?: string) {
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     window.localStorage.removeItem(AUTH_USER_KEY);
     setAuthUser(null);
-    setNotice("Đã đăng xuất quản trị");
+    clearDataErrors(adminOnlyDataKeys);
+    if (message) setNotice(message);
   }
 
   async function submitCheckout() {
@@ -1280,8 +1293,14 @@ function readCustomerOrderIds() {
 
 function readAuthUser(): AuthUser | null {
   try {
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
     const raw = window.localStorage.getItem(AUTH_USER_KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
+    if (!raw || !token) {
+      window.localStorage.removeItem(AUTH_USER_KEY);
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+      return null;
+    }
+    return JSON.parse(raw) as AuthUser;
   } catch {
     window.localStorage.removeItem(AUTH_USER_KEY);
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -1353,8 +1372,20 @@ function translateError(message: string) {
   if (message.includes("Invalid pickup token")) return "Mã nhận hàng không hợp lệ";
   if (message.includes("Order is not on the staff board")) return "Đơn chưa xuất hiện trên bảng nhân viên";
   if (message.includes("Capacity must be at least")) return "Không thể giảm số ô thấp hơn ô đang có đơn";
+  if (message.includes("Invalid credentials")) return "Sai tài khoản hoặc mật khẩu";
+  if (isAuthFailure(message)) return "Phiên quản trị đã hết hạn, vui lòng đăng nhập lại";
   if (message.includes("Request failed")) return "Yêu cầu thất bại";
   return message;
+}
+
+function isAuthFailure(message: string) {
+  return [
+    "Missing Authorization header",
+    "Authorization must use Bearer token",
+    "Invalid auth token",
+    "Auth token expired",
+    "Role is not allowed"
+  ].some((item) => message.includes(item));
 }
 
 function isStepReached(status: string, step: string) {
