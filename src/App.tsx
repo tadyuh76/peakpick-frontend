@@ -659,12 +659,9 @@ function App() {
   return (
     <main class="app-shell">
       <header class="topbar">
-        <div class="brand-heading">
-          <img class="brand-logo" src="/logo.svg" alt="PeakPick logo" width="88" height="88" />
-          <div>
-            <p class="eyebrow">PeakPick</p>
-            <h1>{pageTitle()}</h1>
-          </div>
+        <div>
+          <p class="eyebrow">PeakPick</p>
+          <h1>{pageTitle()}</h1>
         </div>
         <div class="topbar-actions">
           <Show when={authUser()}>
