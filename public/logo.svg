@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">PeakPick logo</title>
+  <desc id="desc">Green pickup bag icon with a check mark.</desc>
+  <rect width="64" height="64" rx="14" fill="#24745f"/>
+  <path d="M20 25.5h24l-2.2 21.2A5.8 5.8 0 0 1 36 52H28a5.8 5.8 0 0 1-5.8-5.3L20 25.5Z" fill="#fffdf7"/>
+  <path d="M25 25.5V22a7 7 0 0 1 14 0v3.5" fill="none" stroke="#fffdf7" stroke-width="5" stroke-linecap="round"/>
+  <path d="m27.4 38.3 3.5 3.6 7.7-9" fill="none" stroke="#24745f" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="45.5" cy="18.5" r="5.5" fill="#f2bd3a"/>
+</svg>
