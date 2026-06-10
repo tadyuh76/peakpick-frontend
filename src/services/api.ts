@@ -43,6 +43,7 @@ function needsAuth(path: string, method = "GET") {
   return (
     path === "/identity/auth/me" ||
     path.startsWith("/analytics/") ||
+    path.startsWith("/system/") ||
     path.startsWith("/notifications/") ||
     (path.startsWith("/store/") && upperMethod !== "GET") ||
     (path.startsWith("/inventory/") && upperMethod !== "GET") ||
@@ -152,10 +153,10 @@ export const peakpickApi = {
   },
 
   getAnalytics(): Promise<AnalyticsSnapshot> {
-    return requestJson<AnalyticsSnapshot>("/analytics/events");
+    return requestJson<AnalyticsSnapshot>("/system/events");
   },
 
   getOperationsSummary(): Promise<OperationsSummary> {
-    return requestJson<OperationsSummary>("/analytics/operations/summary");
+    return requestJson<OperationsSummary>("/system/operations/summary");
   }
 };
