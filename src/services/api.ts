@@ -19,6 +19,20 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000
 export const AUTH_TOKEN_KEY = "peakpick:auth-token";
 export const AUTH_USER_KEY = "peakpick:auth-user";
 
+async function errorMessage(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) return `Request failed with ${response.status}`;
+
+  try {
+    const body = JSON.parse(text) as { detail?: unknown };
+    if (typeof body.detail === "string") return body.detail;
+  } catch {
+    return text;
+  }
+
+  return text;
+}
+
 function authHeaders(): Record<string, string> {
   const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -35,8 +49,7 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed with ${response.status}`);
+    throw new Error(await errorMessage(response));
   }
 
   return response.json() as Promise<T>;
