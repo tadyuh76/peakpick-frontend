@@ -396,7 +396,12 @@ function App() {
       await action();
       setNotice(label);
     } catch (err) {
-      setError(err instanceof Error ? translateError(err.message) : "Yêu cầu thất bại");
+      const message = err instanceof Error ? err.message : "Yêu cầu thất bại";
+      if (isAuthFailure(message)) {
+        clearAdminSession("Phiên quản trị đã hết hạn, vui lòng đăng nhập lại");
+        return;
+      }
+      setError(translateError(message));
     } finally {
       setBusy(false);
     }
@@ -1309,7 +1314,7 @@ function readAuthUser(): AuthUser | null {
   try {
     const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
     const raw = window.localStorage.getItem(AUTH_USER_KEY);
-    if (!raw || !token) {
+    if (!raw || !token || !isStoredTokenFresh(token)) {
       window.localStorage.removeItem(AUTH_USER_KEY);
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
@@ -1319,6 +1324,19 @@ function readAuthUser(): AuthUser | null {
     window.localStorage.removeItem(AUTH_USER_KEY);
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     return null;
+  }
+}
+
+function isStoredTokenFresh(token: string) {
+  try {
+    const [encodedPayload] = token.split(".");
+    if (!encodedPayload) return false;
+    const base64Payload = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedPayload = base64Payload.padEnd(base64Payload.length + ((4 - base64Payload.length % 4) % 4), "=");
+    const payload = JSON.parse(window.atob(paddedPayload));
+    return Number(payload.exp ?? 0) > Date.now() / 1000;
+  } catch {
+    return false;
   }
 }
 
