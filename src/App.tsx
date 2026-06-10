@@ -54,7 +54,6 @@ const adminTabs = [
   { id: "reservations" as const, label: "Lịch giữ ô" },
   { id: "events" as const, label: "Nhật ký" }
 ] satisfies Array<{ id: AdminTabId; label: string }>;
-const adminOnlyDataKeys = ["Nhật ký thông báo", "Thống kê hệ thống", "Tóm tắt vận hành"];
 
 function App() {
   const [activeView, setActiveView] = createSignal<RouteId>(routeFromPath(window.location.pathname));
@@ -185,11 +184,6 @@ function App() {
     const role = authUser()?.role;
     return role === "admin" || role === "store_manager";
   });
-  const visibleDataErrorKeys = createMemo(() => {
-    const keys = Object.keys(dataErrors());
-    if (activeView() === "admin" && canUseAdmin()) return keys;
-    return keys.filter((key) => !adminOnlyDataKeys.includes(key));
-  });
 
   const canMarkPreparing = createMemo(() => {
     const status = selectedBoardItem()?.status;
@@ -301,20 +295,14 @@ function App() {
     return groups.filter((group) => group.orders.length > 0);
   });
 
-  const syncRoute = () => {
-    const route = routeFromPath(window.location.pathname);
-    if (route === "customer") {
-      clearDataErrors(adminOnlyDataKeys);
-    }
-    setActiveView(route);
-  };
+  const syncRoute = () => setActiveView(routeFromPath(window.location.pathname));
 
   onMount(async () => {
     window.addEventListener("popstate", syncRoute);
     try {
       await loadProducts();
       await refreshCustomerData();
-      if (activeView() === "admin" && canUseAdmin()) {
+      if (canUseAdmin()) {
         await refreshAdminData({ announceNewOrders: false });
       }
       syncAdminOrderBaseline();
@@ -326,10 +314,6 @@ function App() {
   onCleanup(() => {
     window.removeEventListener("popstate", syncRoute);
     if (adminToastTimer) window.clearTimeout(adminToastTimer);
-  });
-
-  createEffect(() => {
-    document.title = `${pageTitle()} | PeakPick`;
   });
 
   createEffect(() => {
@@ -400,12 +384,7 @@ function App() {
       await action();
       setNotice(label);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Yêu cầu thất bại";
-      if (isAuthFailure(message)) {
-        clearAdminSession("Phiên quản trị đã hết hạn, vui lòng đăng nhập lại");
-        return;
-      }
-      setError(translateError(message));
+      setError(err instanceof Error ? translateError(err.message) : "Yêu cầu thất bại");
     } finally {
       setBusy(false);
     }
@@ -469,15 +448,9 @@ function App() {
       });
       return true;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Yêu cầu thất bại";
-      if (isAuthFailure(message)) {
-        clearAdminSession("Phiên quản trị đã hết hạn, vui lòng đăng nhập lại");
-        setError("");
-        return false;
-      }
       setDataErrors((current) => ({
         ...current,
-        [key]: translateError(message)
+        [key]: err instanceof Error ? translateError(err.message) : "Yêu cầu thất bại"
       }));
       return false;
     }
@@ -497,21 +470,15 @@ function App() {
       window.localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
       window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user));
       setAuthUser(response.user);
-      clearDataErrors(adminOnlyDataKeys);
       await refreshAdminData({ announceNewOrders: false });
     });
   }
 
   function logout() {
-    clearAdminSession("Đã đăng xuất quản trị");
-  }
-
-  function clearAdminSession(message?: string) {
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     window.localStorage.removeItem(AUTH_USER_KEY);
     setAuthUser(null);
-    clearDataErrors(adminOnlyDataKeys);
-    if (message) setNotice(message);
+    setNotice("Đã đăng xuất quản trị");
   }
 
   async function submitCheckout() {
@@ -650,21 +617,15 @@ function App() {
     if (window.location.pathname !== path) {
       window.history.pushState({}, "", path);
     }
-    if (route === "customer") {
-      clearDataErrors(adminOnlyDataKeys);
-    }
     setActiveView(route);
   }
 
   return (
     <main class="app-shell">
       <header class="topbar">
-        <div class="brand-heading">
-          <img class="brand-logo" src="/logo.svg" alt="PeakPick logo" width="44" height="44" />
-          <div>
-            <p class="eyebrow">PeakPick</p>
-            <h1>{pageTitle()}</h1>
-          </div>
+        <div>
+          <p class="eyebrow">PeakPick</p>
+          <h1>{pageTitle()}</h1>
         </div>
         <div class="topbar-actions">
           <Show when={authUser()}>
@@ -737,10 +698,10 @@ function App() {
         </div>
       </Show>
 
-      <Show when={visibleDataErrorKeys().length > 0}>
+      <Show when={Object.keys(dataErrors()).length > 0}>
         <div class="module-alert" role="status">
           <strong>Một số dịch vụ đang không khả dụng.</strong>
-          <span>{visibleDataErrorKeys().join(", ")}</span>
+          <span>{Object.keys(dataErrors()).join(", ")}</span>
         </div>
       </Show>
 
@@ -1319,31 +1280,12 @@ function readCustomerOrderIds() {
 
 function readAuthUser(): AuthUser | null {
   try {
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
     const raw = window.localStorage.getItem(AUTH_USER_KEY);
-    if (!raw || !token || !isStoredTokenFresh(token)) {
-      window.localStorage.removeItem(AUTH_USER_KEY);
-      window.localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    return JSON.parse(raw) as AuthUser;
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     window.localStorage.removeItem(AUTH_USER_KEY);
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     return null;
-  }
-}
-
-function isStoredTokenFresh(token: string) {
-  try {
-    const [encodedPayload] = token.split(".");
-    if (!encodedPayload) return false;
-    const base64Payload = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
-    const paddedPayload = base64Payload.padEnd(base64Payload.length + ((4 - base64Payload.length % 4) % 4), "=");
-    const payload = JSON.parse(window.atob(paddedPayload));
-    return Number(payload.exp ?? 0) > Date.now() / 1000;
-  } catch {
-    return false;
   }
 }
 
@@ -1411,20 +1353,8 @@ function translateError(message: string) {
   if (message.includes("Invalid pickup token")) return "Mã nhận hàng không hợp lệ";
   if (message.includes("Order is not on the staff board")) return "Đơn chưa xuất hiện trên bảng nhân viên";
   if (message.includes("Capacity must be at least")) return "Không thể giảm số ô thấp hơn ô đang có đơn";
-  if (message.includes("Invalid credentials")) return "Sai tài khoản hoặc mật khẩu";
-  if (isAuthFailure(message)) return "Phiên quản trị đã hết hạn, vui lòng đăng nhập lại";
   if (message.includes("Request failed")) return "Yêu cầu thất bại";
   return message;
-}
-
-function isAuthFailure(message: string) {
-  return [
-    "Missing Authorization header",
-    "Authorization must use Bearer token",
-    "Invalid auth token",
-    "Auth token expired",
-    "Role is not allowed"
-  ].some((item) => message.includes(item));
 }
 
 function isStepReached(status: string, step: string) {

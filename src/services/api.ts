@@ -19,50 +19,24 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000
 export const AUTH_TOKEN_KEY = "peakpick:auth-token";
 export const AUTH_USER_KEY = "peakpick:auth-user";
 
-async function errorMessage(response: Response): Promise<string> {
-  const text = await response.text();
-  if (!text) return `Request failed with ${response.status}`;
-
-  try {
-    const body = JSON.parse(text) as { detail?: unknown };
-    if (typeof body.detail === "string") return body.detail;
-  } catch {
-    return text;
-  }
-
-  return text;
-}
-
 function authHeaders(): Record<string, string> {
   const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function needsAuth(path: string, method = "GET") {
-  const upperMethod = method.toUpperCase();
-  return (
-    path === "/identity/auth/me" ||
-    path.startsWith("/analytics/") ||
-    path.startsWith("/system/") ||
-    path.startsWith("/notifications/") ||
-    (path.startsWith("/store/") && upperMethod !== "GET") ||
-    (path.startsWith("/inventory/") && upperMethod !== "GET") ||
-    (path.startsWith("/slots/") && upperMethod !== "GET")
-  );
 }
 
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
-      ...(needsAuth(path, options.method) ? authHeaders() : {}),
+      ...authHeaders(),
       ...options.headers
     },
     ...options
   });
 
   if (!response.ok) {
-    throw new Error(await errorMessage(response));
+    const message = await response.text();
+    throw new Error(message || `Request failed with ${response.status}`);
   }
 
   return response.json() as Promise<T>;
@@ -153,10 +127,10 @@ export const peakpickApi = {
   },
 
   getAnalytics(): Promise<AnalyticsSnapshot> {
-    return requestJson<AnalyticsSnapshot>("/system/events");
+    return requestJson<AnalyticsSnapshot>("/analytics/events");
   },
 
   getOperationsSummary(): Promise<OperationsSummary> {
-    return requestJson<OperationsSummary>("/system/operations/summary");
+    return requestJson<OperationsSummary>("/analytics/operations/summary");
   }
 };

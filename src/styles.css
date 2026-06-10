@@ -83,19 +83,6 @@ label {
   gap: 10px;
 }
 
-.brand-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.brand-logo {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-}
-
 .auth-chip {
   display: inline-flex;
   min-height: 38px;
