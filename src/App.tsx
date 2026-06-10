@@ -185,6 +185,11 @@ function App() {
     const role = authUser()?.role;
     return role === "admin" || role === "store_manager";
   });
+  const visibleDataErrorKeys = createMemo(() => {
+    const keys = Object.keys(dataErrors());
+    if (activeView() === "admin" && canUseAdmin()) return keys;
+    return keys.filter((key) => !adminOnlyDataKeys.includes(key));
+  });
 
   const canMarkPreparing = createMemo(() => {
     const status = selectedBoardItem()?.status;
@@ -296,14 +301,20 @@ function App() {
     return groups.filter((group) => group.orders.length > 0);
   });
 
-  const syncRoute = () => setActiveView(routeFromPath(window.location.pathname));
+  const syncRoute = () => {
+    const route = routeFromPath(window.location.pathname);
+    if (route === "customer") {
+      clearDataErrors(adminOnlyDataKeys);
+    }
+    setActiveView(route);
+  };
 
   onMount(async () => {
     window.addEventListener("popstate", syncRoute);
     try {
       await loadProducts();
       await refreshCustomerData();
-      if (canUseAdmin()) {
+      if (activeView() === "admin" && canUseAdmin()) {
         await refreshAdminData({ announceNewOrders: false });
       }
       syncAdminOrderBaseline();
@@ -630,6 +641,9 @@ function App() {
     if (window.location.pathname !== path) {
       window.history.pushState({}, "", path);
     }
+    if (route === "customer") {
+      clearDataErrors(adminOnlyDataKeys);
+    }
     setActiveView(route);
   }
 
@@ -711,10 +725,10 @@ function App() {
         </div>
       </Show>
 
-      <Show when={Object.keys(dataErrors()).length > 0}>
+      <Show when={visibleDataErrorKeys().length > 0}>
         <div class="module-alert" role="status">
           <strong>Một số dịch vụ đang không khả dụng.</strong>
-          <span>{Object.keys(dataErrors()).join(", ")}</span>
+          <span>{visibleDataErrorKeys().join(", ")}</span>
         </div>
       </Show>
 
