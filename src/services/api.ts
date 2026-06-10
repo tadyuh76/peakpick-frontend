@@ -38,11 +38,23 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function needsAuth(path: string, method = "GET") {
+  const upperMethod = method.toUpperCase();
+  return (
+    path === "/identity/auth/me" ||
+    path.startsWith("/analytics/") ||
+    path.startsWith("/notifications/") ||
+    (path.startsWith("/store/") && upperMethod !== "GET") ||
+    (path.startsWith("/inventory/") && upperMethod !== "GET") ||
+    (path.startsWith("/slots/") && upperMethod !== "GET")
+  );
+}
+
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
+      ...(needsAuth(path, options.method) ? authHeaders() : {}),
       ...options.headers
     },
     ...options
