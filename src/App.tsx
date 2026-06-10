@@ -660,7 +660,7 @@ function App() {
     <main class="app-shell">
       <header class="topbar">
         <div class="brand-heading">
-          <img class="brand-logo" src="/logo.svg" alt="PeakPick logo" width="44" height="44" />
+          <img class="brand-logo" src="/logo.svg" alt="PeakPick logo" width="88" height="88" />
           <div>
             <p class="eyebrow">PeakPick</p>
             <h1>{pageTitle()}</h1>
