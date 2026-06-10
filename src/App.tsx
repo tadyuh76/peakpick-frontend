@@ -329,6 +329,10 @@ function App() {
   });
 
   createEffect(() => {
+    document.title = `${pageTitle()} | PeakPick`;
+  });
+
+  createEffect(() => {
     const currentSelection = selectedOrderId();
     if (currentSelection && orders().some((order) => order.order_id === currentSelection)) return;
     setSelectedOrderId(board()[0]?.order_id ?? orders()[0]?.order_id ?? "");
@@ -655,9 +659,12 @@ function App() {
   return (
     <main class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">PeakPick</p>
-          <h1>{pageTitle()}</h1>
+        <div class="brand-heading">
+          <img class="brand-logo" src="/logo.svg" alt="PeakPick logo" width="44" height="44" />
+          <div>
+            <p class="eyebrow">PeakPick</p>
+            <h1>{pageTitle()}</h1>
+          </div>
         </div>
         <div class="topbar-actions">
           <Show when={authUser()}>
