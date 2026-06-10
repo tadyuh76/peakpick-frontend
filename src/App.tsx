@@ -312,8 +312,10 @@ function App() {
   onMount(async () => {
     window.addEventListener("popstate", syncRoute);
     try {
-      await loadProducts();
-      await refreshCustomerData();
+      await Promise.all([
+        loadProducts(),
+        refreshCustomerData({ includeOrderStatus: customerOrderIds().length > 0 })
+      ]);
       if (activeView() === "admin" && canUseAdmin()) {
         await refreshAdminData({ announceNewOrders: false });
       }
@@ -446,17 +448,23 @@ function App() {
     syncAdminOrderBaseline();
   }
 
-  async function refreshCustomerData() {
+  async function refreshCustomerData(options: { includeOrderStatus?: boolean } = {}) {
     clearDataErrors(["Nhật ký thông báo", "Thống kê hệ thống", "Tóm tắt vận hành"]);
-    await Promise.all([
-      loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
-      loadResource("Bảng xử lý đơn", peakpickApi.getStaffBoard, setBoard),
+    const shouldLoadOrderStatus =
+      options.includeOrderStatus ?? (customerOrderIds().length > 0 || Boolean(checkout()?.order));
+    const requests = [
       loadResource("Lịch giữ ô nhận", peakpickApi.getSlotReservations, setReservations),
-      loadResource("Khung giờ nhận hàng", peakpickApi.getPickupWindows, setPickupWindowMeta),
-      loadResource("Ô nhận", peakpickApi.getSlots, setSlots),
-      loadResource("Tồn kho", peakpickApi.getStock, setStock),
-      loadResource("Tồn kho thấp", () => peakpickApi.getLowStock(30), setLowStock)
-    ]);
+      loadResource("Khung giờ nhận hàng", peakpickApi.getPickupWindows, setPickupWindowMeta)
+    ];
+
+    if (shouldLoadOrderStatus) {
+      requests.push(
+        loadResource("Đơn hàng", peakpickApi.listOrders, setOrders),
+        loadResource("Bảng xử lý đơn", peakpickApi.getStaffBoard, setBoard)
+      );
+    }
+
+    await Promise.all(requests);
   }
 
   async function loadResource<T>(key: string, request: () => Promise<T>, setter: (value: T) => void) {
@@ -527,7 +535,7 @@ function App() {
       setSelectedOrderId(response.order.order_id);
       setPickupToken("");
       await new Promise((resolve) => setTimeout(resolve, 600));
-      await refreshCustomerData();
+      await refreshCustomerData({ includeOrderStatus: true });
     });
   }
 
